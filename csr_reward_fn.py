@@ -4,6 +4,7 @@ from transformers import AutoTokenizer
 import numpy as np
 import textstat
 import pandas as pd
+import random
 
 # will try to use the tokenizer the model is using for tokenization
 llama_tok_concise_rew = AutoTokenizer.from_pretrained("unsloth/Llama-3.2-3B-Instruct-bnb-4bit")
@@ -95,6 +96,8 @@ def reward_fn(prompts, completions, reference, *kwargs):
     con_rewards = calc_concise_reward(prompts,completions)
     
     batch_rewards = [sim_rewards, read_rewards, con_rewards]
+
+    return random.random()
 
     
 
