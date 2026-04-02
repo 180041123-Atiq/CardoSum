@@ -50,36 +50,16 @@ if __name__ == '__main__':
         output_dir="./debug_grpo",
     
         # 🔹 CORE (must set)
-        num_generations=4,                 # VERY IMPORTANT (G > 1)
-        per_device_train_batch_size=4,     # small batch
-        max_completion_length=64,          # keep fast
-    
-        # 🔹 TRAIN CONTROL
-        max_steps=1,                       # only 1 step
-        learning_rate=1e-6,
-    
-        # 🔹 SAMPLING (to ensure diversity)
-        temperature=1.0,
-        top_p=1.0,
-        top_k=0,
-    
-        # 🔹 LOGGING
-        logging_steps=1,
-        report_to="none",
-    
-        # 🔹 STABILITY
-        bf16=True,                         # if GPU supports
-        gradient_checkpointing=False,      # disable for debugging
-    
-        # 🔹 IMPORTANT (for your case)
+        num_generations=2,                
+        per_device_train_batch_size=4,     
+        max_completion_length=64,          
         num_iterations=1,
-        scale_rewards="group",             # default is fine
+    )
 
-        # generation_kwargs={
+    # generation_kwargs={
         #     "num_return_sequences": 4,
         #     "do_sample": True,
         # }
-    )
 
     peft_config = LoraConfig(
         r=8,
