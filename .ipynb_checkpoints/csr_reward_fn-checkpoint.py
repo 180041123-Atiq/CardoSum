@@ -13,9 +13,9 @@ sim_model = SentenceTransformer("all-MiniLM-L6-v2")
 def hyper_params_csr(paths=None):
     if paths is None:
         paths = [
-            '/content/drive/MyDrive/Research_with_Atiq/Medical_Report_Summarization/test.csv',
-            '/content/drive/MyDrive/Research_with_Atiq/Medical_Report_Summarization/val.csv',
-            '/content/drive/MyDrive/Research_with_Atiq/Medical_Report_Summarization/train.csv'
+            'test.csv',
+            'val.csv',
+            'train.csv'
         ]
     
     data_cr_list, smog_list = [], []
@@ -89,15 +89,15 @@ def calc_readability_reward(completions):
 
     return rewards
 
-def reward_fn(prompts, completions, reference, *kwargs):
+def reward_fn(prompts, completions, reference, **kwargs):
 
-    sim_rewards = calc_similarity_reward(completions, reference)
-    read_rewards = calc_readability_reward(completions)
-    con_rewards = calc_concise_reward(prompts,completions)
+    # sim_rewards = calc_similarity_reward(completions, reference)
+    # read_rewards = calc_readability_reward(completions)
+    # con_rewards = calc_concise_reward(prompts,completions)
     
-    batch_rewards = [sim_rewards, read_rewards, con_rewards]
+    # batch_rewards = [sim_rewards, read_rewards, con_rewards]
 
-    return random.random()
+    return [random.random() for ii in range(len(prompts))]
 
     
 

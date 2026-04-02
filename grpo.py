@@ -1,6 +1,8 @@
 import pandas as pd
 from datasets import Dataset
-from trl import GRPOTrainer, GRPOConfig
+from trl import GRPOConfig
+from csr_trainer import CSRTrainer
+from peft import LoraConfig
 
 from csr_reward_fn import reward_fn
 
@@ -24,9 +26,8 @@ def get_dataset_dict(paths):
         initial_prompt = 'Please explain the following Echocardiography report. '
         for ii in range(df.shape[0]):
             if initial_prompt in df.loc[ii,'prompt']:
-                cnt_initial_prompt += 1
-                df_str = df_train.loc[ii,'prompt']
-                df_train.loc[ii,'prompt'] = df_str.split(initial_prompt)[1]
+                df_str = df.loc[ii,'prompt']
+                df.loc[ii,'prompt'] = df_str.split(initial_prompt)[1]
 
         df['prompt'] = df['prompt'].apply(lambda x: [{"role": "user", "content": alpaca_prompt_grpo.format(x)}])
 
@@ -39,9 +40,9 @@ def get_dataset_dict(paths):
 if __name__ == '__main__':
 
     paths = {
-        'train': 'workspace/CardoSum/train.csv',
-        'val': 'workspace/CardoSum/val.csv',
-        'test': 'workspace/CardoSum/test.csv'
+        'train': 'train.csv',
+        'val': 'val.csv',
+        'test': 'test.csv'
     }
     dataset_dict = get_dataset_dict(paths)
 
@@ -50,7 +51,7 @@ if __name__ == '__main__':
     
         # 🔹 CORE (must set)
         num_generations=4,                 # VERY IMPORTANT (G > 1)
-        per_device_train_batch_size=2,     # small batch
+        per_device_train_batch_size=4,     # small batch
         max_completion_length=64,          # keep fast
     
         # 🔹 TRAIN CONTROL
@@ -73,13 +74,28 @@ if __name__ == '__main__':
         # 🔹 IMPORTANT (for your case)
         num_iterations=1,
         scale_rewards="group",             # default is fine
+
+        # generation_kwargs={
+        #     "num_return_sequences": 4,
+        #     "do_sample": True,
+        # }
+    )
+
+    peft_config = LoraConfig(
+        r=8,
+        lora_alpha=16,
+        target_modules=["q_proj", "v_proj"],  # important for LLaMA
+        lora_dropout=0.05,
+        bias="none",
+        task_type="CAUSAL_LM",
     )
     
-    trainer = GRPOTrainer(
+    trainer = CSRTrainer(
         model="unsloth/Llama-3.2-3B-Instruct-bnb-4bit",
         reward_funcs=reward_fn,
         args=config,
         train_dataset=dataset_dict['train'],
+        peft_config=peft_config,
     )
     trainer.train()
     
