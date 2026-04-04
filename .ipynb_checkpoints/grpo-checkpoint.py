@@ -4,7 +4,7 @@ from trl import GRPOConfig
 from csr_trainer import CSRTrainer
 from peft import LoraConfig
 
-from csr_reward_fn import reward_fn
+from csr_reward_fn import calc_similarity_reward, calc_readability_reward, calc_concise_reward
 
 alpaca_prompt_grpo = """Below is an echocardiography report. Summarize it in clear, patient-friendly language.
 
@@ -45,26 +45,41 @@ if __name__ == '__main__':
         'test': 'test.csv'
     }
     dataset_dict = get_dataset_dict(paths)
-
-    config = GRPOConfig(
-        output_dir="./debug_grpo",
+    # print(len(dataset_dict['train']))
+    # print(len(dataset_dict['val']))
+    # print(len(dataset_dict['test']))
+    # exit()
     
-        # 🔹 CORE (must set)
-        num_generations=2,                
-        per_device_train_batch_size=4,     
-        max_completion_length=64,          
+    config = GRPOConfig(
+        output_dir="./HVO",
+    
+        num_generations=2,
+        per_device_train_batch_size=4,
+        max_completion_length=768,
         num_iterations=1,
+    
+        eval_strategy="steps",
+        eval_steps=2,
+    
+        save_strategy="steps",
+        save_steps=2,
+        save_total_limit=1,             
+        load_best_model_at_end=True,
+    
+        metric_for_best_model="eval_reward",
+        greater_is_better=True,
+    
+        # optional
+        save_only_model=True,            # avoids optimizer states
+    
+        reward_weights=[-1.0, -1.0, -1.0],
+        multi_objective_aggregation='HVO',
     )
-
-    # generation_kwargs={
-        #     "num_return_sequences": 4,
-        #     "do_sample": True,
-        # }
 
     peft_config = LoraConfig(
         r=8,
         lora_alpha=16,
-        target_modules=["q_proj", "v_proj"],  # important for LLaMA
+        target_modules=["q_proj", "v_proj"],
         lora_dropout=0.05,
         bias="none",
         task_type="CAUSAL_LM",
@@ -72,9 +87,10 @@ if __name__ == '__main__':
     
     trainer = CSRTrainer(
         model="unsloth/Llama-3.2-3B-Instruct-bnb-4bit",
-        reward_funcs=reward_fn,
+        reward_funcs=[calc_similarity_reward, calc_readability_reward, calc_concise_reward],
         args=config,
         train_dataset=dataset_dict['train'],
+        eval_dataset=dataset_dict['val'],
         peft_config=peft_config,
     )
     trainer.train()

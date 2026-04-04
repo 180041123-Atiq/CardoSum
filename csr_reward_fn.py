@@ -55,11 +55,17 @@ RHO = 0.3
 LAMBDA = 2
 
 
-def calc_similarity_reward(completions, reference):
+def calc_similarity_reward(completions, reference, **kwargs):
     rewards = []
 
     for completion, ref in zip(completions, reference):
-        embeddings = sim_model.encode([completion, ref])
+
+        # print(type(completion[0]['content']))
+        # print()
+        # print(type(ref))
+        # exit()
+        
+        embeddings = sim_model.encode([completion[0]['content'], ref])
 
         score = cosine_similarity([embeddings[0]],[embeddings[1]])[0][0]
         score = max(0.0, min(1.0, score))
@@ -67,12 +73,24 @@ def calc_similarity_reward(completions, reference):
 
     return rewards
 
-def calc_concise_reward(prompts, completions):
+def calc_concise_reward(prompts, completions, **kwargs):
     rewards = []
     for prompt, completion in zip(prompts, completions):
+        prompt = prompt[0]['content']
+        completion = completion[0]['content']
         report = prompt.split("### Report:")[-1].split("### Summary:")[0]
+
+        # print(report)
+        # print()
+        # print(completion)
+        
         len_report = len(llama_tok_concise_rew.encode(report))
         len_comp = len(llama_tok_concise_rew.encode(completion))
+
+        # print(len_report, '   ', len_comp)
+
+        # exit()
+        
         gen_cr = len_report/len_comp
         diff = abs(gen_cr-mean_data_cr)
         reward = 1/(1+(diff/RHO)**LAMBDA)
@@ -81,10 +99,13 @@ def calc_concise_reward(prompts, completions):
 
     return rewards
 
-def calc_readability_reward(completions):
+def calc_readability_reward(completions, **kwargs):
+
+    # completions comes in chat template
+    
     rewards = []
     for ii, completion in enumerate(completions):
-        smog_id = textstat.smog_index(completion)
+        smog_id = textstat.smog_index(completion[0]['content'])
         rewards.append(np.exp(-abs(smog_id - mean_smog) / std_smog))
 
     return rewards

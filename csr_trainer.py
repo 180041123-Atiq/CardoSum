@@ -33,46 +33,6 @@ class CSRTrainer(GRPOTrainer):
             rollout_func=rollout_func,
             environment_factory=environment_factory,
         )
-
-    @profiling_decorator
-    def _prepare_inputs(self, generation_batch: dict[str, torch.Tensor | Any]) -> dict[str, torch.Tensor | Any]:
-        # Prepares inputs for model training/evaluation by managing completion generation and batch handling.
-        # During training:
-        #   - Receives the local generation batch (Per-GPU batch size × steps per generation)
-        #     from the modified training dataloader instead of the standard local batch
-        #   - Generates completions once for the entire generation batch and splits it into batches of size
-        #     `per_device_train_batch_size`
-        #   - Buffers these completions and returns the appropriate slice for the current accumulation step
-        #   - Optimizes by regenerating completions only periodically (every steps_per_generation * num_iterations)
-        # During evaluation:
-        #   - The input is treated as a standard local batch (no accumulation, no multiple iterations)
-        #   - Completions are generated for each batch without buffering or reuse
-        # Returns a single local batch in both cases.
-
-        mode = "train" if self.model.training else "eval"
-        if mode == "train":
-            generate_every = self.args.steps_per_generation * self.num_iterations
-            if self._step % generate_every == 0 or self._buffered_inputs is None:
-                # self._buffered_inputs=None can occur when resuming from a checkpoint
-                generation_batch = self._generate_and_score_completions(generation_batch)
-                generation_batch = split_pixel_values_by_grid(generation_batch)
-                generation_batch = shuffle_sequence_dict(generation_batch)
-                generation_batches = split_tensor_dict(generation_batch, self.args.steps_per_generation)
-                self._buffered_inputs = [unsplit_pixel_values_by_grid(batch) for batch in generation_batches]
-            inputs = self._buffered_inputs[self._step % self.args.steps_per_generation]
-        else:
-            # In evaluation, there is neither batch grouping for generation, nor multiple iterations, hence
-            # local generation batch == local eval batch
-            inputs = self._generate_and_score_completions(generation_batch)
-
-        print(type(inputs))
-        print(inputs.keys())
-        print(type(inputs['prompt_ids']))
-        print(inputs['prompt_ids'].size())
-        print(inputs['completion_ids'].size())
-        exit()
-        
-        return inputs
     
     def _generate_and_score_completions(
         self, inputs: list[dict[str, torch.Tensor | Any]]
@@ -124,17 +84,6 @@ class CSRTrainer(GRPOTrainer):
             sampling_per_token_logps_list,
             extra_fields,
         ) = self._generate(prompts)
-
-        # print("num_generations:", self.num_generations) # G => 4
-        # print("input batch size:", len(inputs)) # B => 4, since batch size is 4
-        # print("after generation prompts shape:", np.array(prompt_ids_list).shape) # (B,..) => (4,345)
-        # print("after generation completion shape:", np.array(completion_ids_list).shape) # (B*G, ...) => (16,64)
-        # exit()
-        
-        # broad casting the prompt so that it has size (B*G,...)
-        # prompt_ids_list = [
-        #     p for p in prompt_ids_list for _ in range(self.num_generations)
-        # ]
 
         # Convert lists of token IDs to padded tensors
         prompt_ids = [torch.tensor(ids) for ids in prompt_ids_list]
@@ -265,9 +214,6 @@ class CSRTrainer(GRPOTrainer):
             else:
                 old_per_token_logps = None
 
-            # print('I am here')
-            # exit()
-            
             # Compute the importance sampling ratio when using vLLM, to correct for potential distribution mismatch
             if self.use_vllm and self.vllm_importance_sampling_correction:
                 mask = completion_mask if tool_mask is None else completion_mask * tool_mask
@@ -329,17 +275,16 @@ class CSRTrainer(GRPOTrainer):
             else:
                 ref_per_token_logps = None
 
-        
-        # print('I am here 2')
-        # exit()
-        
         # Decode
         prompts_text = self.processing_class.batch_decode(prompt_ids, skip_special_tokens=True)
         completions_text = self.processing_class.batch_decode(completion_ids, skip_special_tokens=True)
 
-        # print(type(prompts_text))
-        # print(np.array(prompts_text).shape)
-        # print(np.array(completions_text).shape)
+        # print(type(prompts_text)) # list
+        # print(type(prompts_text[0])) # str
+        # if prompts_text[0] == prompts_text[1] and prompts_text[2] == prompts_text[3]:
+        #     print('first two prompts are same')
+        #     print('second two prompts are same')
+        #     print('So the shape is [0, 0, 1, 1]')
         # exit()
 
         # Merge extra_fields from rollout_func into inputs for reward functions
@@ -357,12 +302,89 @@ class CSRTrainer(GRPOTrainer):
         rewards_per_func = self._calculate_rewards(inputs, prompts, completions, completion_ids_list)
         num_generations = self.num_generations if mode == "train" else self.num_generations_eval
 
-        # print('I am here 3')
+        # print(type(rewards_per_func)) # torch.Tensor
+        # print(rewards_per_func.size()) # (4,3)
         # exit()
 
-        if self.multi_objective_aggregation == "sum_then_normalize":
+        
+        if self.multi_objective_aggregation == "HVO":
+            dtype_rpf = rewards_per_func.dtype
+            device_rpf = rewards_per_func.device
+            # print(dtype_rpf)
+            # print(device_rpf)
+            rewards_per_func = rewards_per_func.cpu().numpy()
+            # print(rewards_per_func)
+            # print()
+            rewards_per_func =  rewards_per_func.reshape(-1,num_generations,rewards_per_func.shape[-1])
+            # print(rewards_per_func)
+            # print(rewards_per_func.shape) # (4,3)
+            # exit()
+
+            num_unique_prompts, _, eval_dim = rewards_per_func.shape
+            min_reward_per_eval_dim = np.full((num_unique_prompts,eval_dim),10000.0)
+            for ii in range(num_unique_prompts):
+                for jj in range(eval_dim):
+                    for kk in range(num_generations):
+                        min_reward_per_eval_dim[ii][jj] = min(min_reward_per_eval_dim[ii][jj],rewards_per_func[ii][kk][jj])
+
+            # print()
+            # print(min_reward_per_eval_dim)
+            # exit()
+
+            DELTA = 0.1
+            EPSILON = 0.99
+            
+            for ii in range(num_unique_prompts):
+                for jj in range(num_generations):
+                    for kk in range(eval_dim):
+                        rewards_per_func[ii][jj][kk] = min(EPSILON, rewards_per_func[ii][jj][kk] - min_reward_per_eval_dim[ii][kk] + DELTA)
+
+            
+            # print(rewards_per_func)
+            # print()
+            rewards_per_func = rewards_per_func.reshape(num_unique_prompts*num_generations,eval_dim) 
+            # print(rewards_per_func)
+            # exit()
+                        
+            rewards_per_func = torch.tensor(rewards_per_func, dtype=dtype_rpf, device=device_rpf)
+            weights = self.reward_weights.to(device).unsqueeze(0) 
+            powered = torch.pow(rewards_per_func, -weights)
+            rewards = torch.prod(powered, dim=1)
+            # rewards = (rewards_per_func * self.reward_weights.to(device).unsqueeze(0)).nansum(dim=1)
+            # print(rewards.size()) (4), its just do weighted sum
+            # exit()
+            mean_grouped_rewards = rewards.view(-1, num_generations).mean(dim=1)
+            mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(num_generations, dim=0)
+            if self.scale_rewards in ["group", "none"]:
+                # If self.scale_rewards = "none", we'll only use std_rewards to check for zero std for logging
+                if num_generations > 1:
+                    std_rewards = rewards.view(-1, num_generations).std(dim=1)
+                    std_rewards = std_rewards.repeat_interleave(num_generations, dim=0)
+                else:  # doesn't occur during training, but could occur in eval when num_generations_eval=1
+                    std_rewards = torch.zeros_like(rewards)
+            elif self.scale_rewards == "batch":
+                # Compute global std
+                if rewards.numel() > 1:
+                    std_rewards = rewards.std().expand_as(rewards)
+                else:  # doesn't occur during training, but could occur in eval when num_generations_eval=batch_size=1
+                    std_rewards = torch.zeros_like(rewards)
+            else:
+                raise ValueError(
+                    f"Invalid value for scale_rewards: {self.scale_rewards}. Must be one of 'batch', 'group', or 'none'."
+                )
+
+            advantages = rewards - mean_grouped_rewards
+            if self.scale_rewards != "none":
+                advantages = advantages / (std_rewards + 1e-4)
+            is_std_zero = torch.isclose(std_rewards, torch.zeros_like(std_rewards))  # for logging
+        elif self.multi_objective_aggregation == "sum_then_normalize":
             # Apply weights to each reward function's output and sum
+            # print(self.reward_weights.to(device).unsqueeze(0)) # tensor([[1., 1., 1.]], device='cuda:0')
+            # print(self.reward_weights.to(device).unsqueeze(0).size()) # tensor([[1., 1., 1.]], device='cuda:0')
+            # exit()
             rewards = (rewards_per_func * self.reward_weights.to(device).unsqueeze(0)).nansum(dim=1)
+            # print(rewards.size()) (4), its just do weighted sum
+            # exit()
             mean_grouped_rewards = rewards.view(-1, num_generations).mean(dim=1)
             mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(num_generations, dim=0)
             if self.scale_rewards in ["group", "none"]:
@@ -405,9 +427,6 @@ class CSRTrainer(GRPOTrainer):
                 "'sum_then_normalize' or 'normalize_then_sum'."
             )
 
-        # print('I am here 4')
-        # exit()
-        
         # Slice to keep only the local part of the data
         process_slice = slice(
             self.accelerator.process_index * len(prompts),
@@ -490,9 +509,6 @@ class CSRTrainer(GRPOTrainer):
                 nanmax(self.accelerator.gather(max_importance_sampling_ratio)).item()
             )
 
-        # print('I am here 5')
-        # exit()
-        
         output = {
             "prompt_ids": prompt_ids,
             "prompt_mask": prompt_mask,
@@ -527,8 +543,4 @@ class CSRTrainer(GRPOTrainer):
             output["num_images"] = num_images
         if tool_mask is not None:
             output["tool_mask"] = tool_mask
-
-        # print('I am here 6')
-        # exit()
-        
         return output
