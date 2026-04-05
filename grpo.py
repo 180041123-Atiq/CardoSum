@@ -3,8 +3,11 @@ from datasets import Dataset
 from trl import GRPOConfig
 from csr_trainer import CSRTrainer
 from peft import LoraConfig
+import os
 
 from csr_reward_fn import calc_similarity_reward, calc_readability_reward, calc_concise_reward
+
+os.environ["TENSORBOARD_LOGGING_DIR"] = "./logs"
 
 alpaca_prompt_grpo = """Below is an echocardiography report. Summarize it in clear, patient-friendly language.
 
@@ -55,25 +58,24 @@ if __name__ == '__main__':
     
         num_generations=2,
         per_device_train_batch_size=4,
-        max_completion_length=768,
+        max_completion_length=640, # since max prompt can be 707, compression is 1.12, so ref should be 707/1.12 = 640
         num_iterations=1,
     
         eval_strategy="steps",
-        eval_steps=2,
+        eval_steps=0.1,
     
         save_strategy="steps",
-        save_steps=2,
+        save_steps=0.2,
         save_total_limit=1,             
-        load_best_model_at_end=True,
+        load_best_model_at_end=False,
     
-        metric_for_best_model="eval_reward",
-        greater_is_better=True,
-    
-        # optional
         save_only_model=True,            # avoids optimizer states
     
         reward_weights=[-1.0, -1.0, -1.0],
         multi_objective_aggregation='HVO',
+
+        logging_steps=10,              # log every N steps
+        report_to="tensorboard", 
     )
 
     peft_config = LoraConfig(
@@ -90,7 +92,7 @@ if __name__ == '__main__':
         reward_funcs=[calc_similarity_reward, calc_readability_reward, calc_concise_reward],
         args=config,
         train_dataset=dataset_dict['train'],
-        eval_dataset=dataset_dict['val'],
+        eval_dataset=dataset_dict['val'].select(range(100)), # just for sanity checking
         peft_config=peft_config,
     )
     trainer.train()

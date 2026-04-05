@@ -347,6 +347,12 @@ class CSRTrainer(GRPOTrainer):
             # exit()
                         
             rewards_per_func = torch.tensor(rewards_per_func, dtype=dtype_rpf, device=device_rpf)
+        
+            # print("MIN reward_per_func:", rewards_per_func.min())
+            # print("MAX reward_per_func:", rewards_per_func.max())
+            # print("ANY NEGATIVE:", (rewards_per_func < 0).any())
+            # print("ANY NAN:", torch.isnan(rewards_per_func).any())
+            
             weights = self.reward_weights.to(device).unsqueeze(0) 
             powered = torch.pow(rewards_per_func, -weights)
             rewards = torch.prod(powered, dim=1)
@@ -441,9 +447,13 @@ class CSRTrainer(GRPOTrainer):
             self._metrics[mode][f"rewards/{reward_func_name}/mean"].append(mean_rewards)
             std_func_rewards = nanstd(rewards_per_func[:, i]).item()
             self._metrics[mode][f"rewards/{reward_func_name}/std"].append(std_func_rewards)
-        rewards = (rewards_per_func * self.reward_weights.to(rewards_per_func.device).unsqueeze(0)).nansum(dim=1)
-        self._metrics[mode]["reward"].append(rewards.mean().item())
-        self._metrics[mode]["reward_std"].append(rewards.std().item())
+        # rewards = (rewards_per_func * self.reward_weights.to(rewards_per_func.device).unsqueeze(0)).nansum(dim=1)
+        log_metric_rewards = rewards.clone()
+        self._metrics[mode]["reward"].append(log_metric_rewards.mean().item())
+        self._metrics[mode]["reward_std"].append(log_metric_rewards.std().item())
+        if mode == "eval":
+            eval_reward = log_metric_rewards.mean().item()
+            self.log({"eval_reward": eval_reward})
         self._metrics[mode]["frac_reward_zero_std"].append(is_std_zero.float().mean().item())
 
         # Log prompt and completion texts
