@@ -56,13 +56,18 @@ if __name__ == '__main__':
     config = GRPOConfig(
         output_dir="./HVO",
     
-        num_generations=2,
-        per_device_train_batch_size=4,
+        num_generations=4,
+        per_device_train_batch_size=16,
+        
+        learning_rate=3e-6,
+        lr_scheduler_type="cosine",
+        warmup_steps=0.05,
+        
         max_completion_length=640, # since max prompt can be 707, compression is 1.12, so ref should be 707/1.12 = 640
         num_iterations=1,
     
-        eval_strategy="steps",
-        eval_steps=0.1,
+        # eval_strategy="steps",
+        # eval_steps=0.1,
     
         save_strategy="steps",
         save_steps=0.2,
@@ -74,14 +79,25 @@ if __name__ == '__main__':
         reward_weights=[-1.0, -1.0, -1.0],
         multi_objective_aggregation='HVO',
 
-        logging_steps=10,              # log every N steps
+        logging_steps=0.002,              # log every N steps
         report_to="tensorboard", 
     )
 
+    # simple finetuning
+    # peft_config = LoraConfig(
+    #     r=8,
+    #     lora_alpha=16,
+    #     target_modules=["q_proj", "v_proj"],
+    #     lora_dropout=0.05,
+    #     bias="none",
+    #     task_type="CAUSAL_LM",
+    # )
+
+    # for hard generation task
     peft_config = LoraConfig(
-        r=8,
-        lora_alpha=16,
-        target_modules=["q_proj", "v_proj"],
+        r=16,
+        lora_alpha=32,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
         lora_dropout=0.05,
         bias="none",
         task_type="CAUSAL_LM",
@@ -92,7 +108,7 @@ if __name__ == '__main__':
         reward_funcs=[calc_similarity_reward, calc_readability_reward, calc_concise_reward],
         args=config,
         train_dataset=dataset_dict['train'],
-        eval_dataset=dataset_dict['val'].select(range(100)), # just for sanity checking
+        # eval_dataset=dataset_dict['val'].select(range(100)), # just for sanity checking
         peft_config=peft_config,
     )
     trainer.train()
