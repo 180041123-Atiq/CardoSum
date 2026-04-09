@@ -111,5 +111,10 @@ if __name__ == '__main__':
         # eval_dataset=dataset_dict['val'].select(range(100)), # just for sanity checking
         peft_config=peft_config,
     )
-    trainer.train()
+
+    resume_from_checkpoint = 'HVO/checkpoint-720'
+    if resume_from_checkpoint != None:
+        trainer.train()
+    else:
+        trainer.train(resume_from_checkpoint=resume_from_checkpoint)
     

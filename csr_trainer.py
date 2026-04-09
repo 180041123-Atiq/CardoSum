@@ -33,6 +33,8 @@ class CSRTrainer(GRPOTrainer):
             rollout_func=rollout_func,
             environment_factory=environment_factory,
         )
+
+        self.awgrpo_reward_per_step = []
     
     def _generate_and_score_completions(
         self, inputs: list[dict[str, torch.Tensor | Any]]
@@ -306,8 +308,83 @@ class CSRTrainer(GRPOTrainer):
         # print(rewards_per_func.size()) # (4,3)
         # exit()
 
+        if self.multi_objective_aggregation == "AWGRPO":
+            dtype_rpf = rewards_per_func.dtype
+            device_rpf = rewards_per_func.device
+            # print(dtype_rpf)
+            # print(device_rpf)
+            rewards_per_func = rewards_per_func.cpu().numpy()
+            # print(rewards_per_func)
+            # print()
+            rewards_per_func =  rewards_per_func.reshape(-1,num_generations,rewards_per_func.shape[-1])
+            # print(rewards_per_func)
+            # print(rewards_per_func.shape) # (4,3)
+            # exit()
+
+            num_unique_prompts, _, eval_dim = rewards_per_func.shape
+            min_reward_per_eval_dim = np.full((num_unique_prompts,eval_dim),10000.0)
+            for ii in range(num_unique_prompts):
+                for jj in range(eval_dim):
+                    for kk in range(num_generations):
+                        min_reward_per_eval_dim[ii][jj] = min(min_reward_per_eval_dim[ii][jj],rewards_per_func[ii][kk][jj])
+
+            # print()
+            # print(min_reward_per_eval_dim)
+            # exit()
+
+            DELTA = 0.1
+            EPSILON = 0.99
+            
+            for ii in range(num_unique_prompts):
+                for jj in range(num_generations):
+                    for kk in range(eval_dim):
+                        rewards_per_func[ii][jj][kk] = min(EPSILON, rewards_per_func[ii][jj][kk] - min_reward_per_eval_dim[ii][kk] + DELTA)
+
+            
+            # print(rewards_per_func)
+            # print()
+            rewards_per_func = rewards_per_func.reshape(num_unique_prompts*num_generations,eval_dim) 
+            # print(rewards_per_func)
+            # exit()
+                        
+            rewards_per_func = torch.tensor(rewards_per_func, dtype=dtype_rpf, device=device_rpf)
         
-        if self.multi_objective_aggregation == "HVO":
+            # print("MIN reward_per_func:", rewards_per_func.min())
+            # print("MAX reward_per_func:", rewards_per_func.max())
+            # print("ANY NEGATIVE:", (rewards_per_func < 0).any())
+            # print("ANY NAN:", torch.isnan(rewards_per_func).any())
+            
+            weights = self.reward_weights.to(device).unsqueeze(0) 
+            powered = torch.pow(rewards_per_func, -weights)
+            rewards = torch.prod(powered, dim=1)
+            # rewards = (rewards_per_func * self.reward_weights.to(device).unsqueeze(0)).nansum(dim=1)
+            # print(rewards.size()) (4), its just do weighted sum
+            # exit()
+            mean_grouped_rewards = rewards.view(-1, num_generations).mean(dim=1)
+            mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(num_generations, dim=0)
+            if self.scale_rewards in ["group", "none"]:
+                # If self.scale_rewards = "none", we'll only use std_rewards to check for zero std for logging
+                if num_generations > 1:
+                    std_rewards = rewards.view(-1, num_generations).std(dim=1)
+                    std_rewards = std_rewards.repeat_interleave(num_generations, dim=0)
+                else:  # doesn't occur during training, but could occur in eval when num_generations_eval=1
+                    std_rewards = torch.zeros_like(rewards)
+            elif self.scale_rewards == "batch":
+                # Compute global std
+                if rewards.numel() > 1:
+                    std_rewards = rewards.std().expand_as(rewards)
+                else:  # doesn't occur during training, but could occur in eval when num_generations_eval=batch_size=1
+                    std_rewards = torch.zeros_like(rewards)
+            else:
+                raise ValueError(
+                    f"Invalid value for scale_rewards: {self.scale_rewards}. Must be one of 'batch', 'group', or 'none'."
+                )
+
+            advantages = rewards - mean_grouped_rewards
+            if self.scale_rewards != "none":
+                advantages = advantages / (std_rewards + 1e-4)
+            is_std_zero = torch.isclose(std_rewards, torch.zeros_like(std_rewards))  # for logging
+        elif self.multi_objective_aggregation == "HVO":
             dtype_rpf = rewards_per_func.dtype
             device_rpf = rewards_per_func.device
             # print(dtype_rpf)
