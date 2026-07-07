@@ -1,5 +1,6 @@
 from trl.trainer.grpo_trainer import *
 import numpy as np
+from collections import deque
 
 class CSRTrainer(GRPOTrainer):
     def __init__(
@@ -34,7 +35,13 @@ class CSRTrainer(GRPOTrainer):
             environment_factory=environment_factory,
         )
 
-        self.awgrpo_reward_per_step = []
+        self._history_window = 12
+
+        self.awgrpo_reward_history = [
+            deque(maxlen=self._history_window),  
+            deque(maxlen=self._history_window),  
+            deque(maxlen=self._history_window),  
+        ]
     
     def _generate_and_score_completions(
         self, inputs: list[dict[str, torch.Tensor | Any]]
@@ -327,6 +334,22 @@ class CSRTrainer(GRPOTrainer):
             
             _min_weight = 0.1  
             _max_weight = 0.8 
+
+            
+
+            for ii in range(num_unique_prompts):
+                avg_reward = []
+                # reward_per_eval_dim = [0,0,0]
+                for jj in range(eval_dim):
+                    reward_value = 0
+                    for kk in range(num_generations):
+                        reward_value = reward_value + rewards_per_func[ii][kk][jj]
+                    
+                    avg_reward_value = reward_value/num_generations
+                    avg_reward.append(avg_reward_value)
+                for i in range(3):
+                    self.awgrpo_reward_history[i].append(avg_reward[i])
+                
 
             for ii in range(num_unique_prompts):
                 for jj in range(num_generations):
