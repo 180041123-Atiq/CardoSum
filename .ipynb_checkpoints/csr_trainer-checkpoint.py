@@ -1,5 +1,6 @@
 from trl.trainer.grpo_trainer import *
 import numpy as np
+from collections import deque
 
 class CSRTrainer(GRPOTrainer):
     def __init__(
@@ -34,7 +35,15 @@ class CSRTrainer(GRPOTrainer):
             environment_factory=environment_factory,
         )
 
-        self.awgrpo_reward_per_step = []
+        self._history_window = 12
+
+        self.awgrpo_reward_history = [
+            deque(maxlen=self._history_window),  
+            deque(maxlen=self._history_window),  
+            deque(maxlen=self._history_window),  
+        ]
+
+        self.current_weights = [1.0, 1.0, 1.0]
     
     def _generate_and_score_completions(
         self, inputs: list[dict[str, torch.Tensor | Any]]
@@ -308,7 +317,9 @@ class CSRTrainer(GRPOTrainer):
         # print(rewards_per_func.size()) # (4,3)
         # exit()
 
+        # AWGRPO=========================================================================================================
         if self.multi_objective_aggregation == "AWGRPO":
+
             dtype_rpf = rewards_per_func.dtype
             device_rpf = rewards_per_func.device
             # print(dtype_rpf)
@@ -322,44 +333,66 @@ class CSRTrainer(GRPOTrainer):
             # exit()
 
             num_unique_prompts, _, eval_dim = rewards_per_func.shape
-            min_reward_per_eval_dim = np.full((num_unique_prompts,eval_dim),10000.0)
+            
+            _min_weight = 0.1  
+            _max_weight = 0.8 
+
+            # avg_rewards = batch_rewards.mean(axis=(0,1))
+            # reward history
             for ii in range(num_unique_prompts):
+                avg_reward = []
+                # reward_per_eval_dim = [0,0,0]
                 for jj in range(eval_dim):
+                    reward_value = 0
                     for kk in range(num_generations):
-                        min_reward_per_eval_dim[ii][jj] = min(min_reward_per_eval_dim[ii][jj],rewards_per_func[ii][kk][jj])
+                        reward_value = reward_value + rewards_per_func[ii][kk][jj]
+                    
+                    avg_reward_value = reward_value/num_generations
+                    avg_reward.append(avg_reward_value)
+                for i in range(3):
+                    self.awgrpo_reward_history[i].append(avg_reward[i])
+                
 
-            # print()
-            # print(min_reward_per_eval_dim)
-            # exit()
-
-            DELTA = 0.1
-            EPSILON = 0.99
-            
+            rewards_per_prompt = []
             for ii in range(num_unique_prompts):
+                reward_per_gen = []
                 for jj in range(num_generations):
+                    weight_updates = []
+                    new_weights = []
                     for kk in range(eval_dim):
-                        rewards_per_func[ii][jj][kk] = min(EPSILON, rewards_per_func[ii][jj][kk] - min_reward_per_eval_dim[ii][kk] + DELTA)
 
+                        # Calculating the slopes
+                        if len(self.awgrpo_reward_history[kk]) < 2:
+                            raise Exception('Reward History should have more than 2 rewards')
+                        x = np.arange(len(self.awgrpo_reward_history[kk]))
+                        slope, _ = np.polyfit(x, self.awgrpo_reward_history[kk], 1)
+
+                        weight_next = np.clip(self.current_weights[kk]*(np.exp(-1 * slope)), _min_weight, _max_weight)
+                        weight_updates.append(weight_next)
+
+                    weights_sum = np.sum(weight_updates)
+                    
+                    for j in range(len(weight_updates)):
+                        updated = weight_updates[j]/weights_sum
+                        self.current_weights[j] = updated
+                        new_weights.append(updated)
+
+                    reward_sum = 0
+                    for k in range(eval_dim):
+                        reward_sum = reward_sum + (new_weights[k]*rewards_per_func[ii][jj][k])
+                    
+                    reward_per_gen.append(reward_sum)
+
+                rewards_per_prompt.append(reward_per_gen)
             
-            # print(rewards_per_func)
-            # print()
-            rewards_per_func = rewards_per_func.reshape(num_unique_prompts*num_generations,eval_dim) 
-            # print(rewards_per_func)
-            # exit()
-                        
+            rewards = torch.tensor(rewards_per_prompt,dtype=dtype_rpf,device=device_rpf)
+            rewards = rewards.reshape(num_unique_prompts*num_generations)
+            rewards_per_func = rewards_per_func.reshape(num_unique_prompts*num_generations,eval_dim)
             rewards_per_func = torch.tensor(rewards_per_func, dtype=dtype_rpf, device=device_rpf)
-        
-            # print("MIN reward_per_func:", rewards_per_func.min())
-            # print("MAX reward_per_func:", rewards_per_func.max())
-            # print("ANY NEGATIVE:", (rewards_per_func < 0).any())
-            # print("ANY NAN:", torch.isnan(rewards_per_func).any())
-            
-            weights = self.reward_weights.to(device).unsqueeze(0) 
-            powered = torch.pow(rewards_per_func, -weights)
-            rewards = torch.prod(powered, dim=1)
-            # rewards = (rewards_per_func * self.reward_weights.to(device).unsqueeze(0)).nansum(dim=1)
-            # print(rewards.size()) (4), its just do weighted sum
+            # print(rewards)
+            # print(rewards.shape)
             # exit()
+
             mean_grouped_rewards = rewards.view(-1, num_generations).mean(dim=1)
             mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(num_generations, dim=0)
             if self.scale_rewards in ["group", "none"]:
@@ -384,17 +417,20 @@ class CSRTrainer(GRPOTrainer):
             if self.scale_rewards != "none":
                 advantages = advantages / (std_rewards + 1e-4)
             is_std_zero = torch.isclose(std_rewards, torch.zeros_like(std_rewards))  # for logging
+
+
+        # HVO===========================================================================================================
         elif self.multi_objective_aggregation == "HVO":
             dtype_rpf = rewards_per_func.dtype
             device_rpf = rewards_per_func.device
             # print(dtype_rpf)
             # print(device_rpf)
             rewards_per_func = rewards_per_func.cpu().numpy()
-            # print(rewards_per_func)
+            # print('Before Reshape', rewards_per_func.shape)
             # print()
             rewards_per_func =  rewards_per_func.reshape(-1,num_generations,rewards_per_func.shape[-1])
             # print(rewards_per_func)
-            # print(rewards_per_func.shape) # (4,3)
+            # print('After Reshape', rewards_per_func.shape) # (4,3)
             # exit()
 
             num_unique_prompts, _, eval_dim = rewards_per_func.shape
@@ -434,7 +470,7 @@ class CSRTrainer(GRPOTrainer):
             powered = torch.pow(rewards_per_func, -weights)
             rewards = torch.prod(powered, dim=1)
             # rewards = (rewards_per_func * self.reward_weights.to(device).unsqueeze(0)).nansum(dim=1)
-            # print(rewards.size()) (4), its just do weighted sum
+            # print('After performing HVO',rewards.size()) #(16), its just do weighted sum
             # exit()
             mean_grouped_rewards = rewards.view(-1, num_generations).mean(dim=1)
             mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(num_generations, dim=0)
@@ -460,6 +496,10 @@ class CSRTrainer(GRPOTrainer):
             if self.scale_rewards != "none":
                 advantages = advantages / (std_rewards + 1e-4)
             is_std_zero = torch.isclose(std_rewards, torch.zeros_like(std_rewards))  # for logging
+        
+        
+        
+        # sum_then_normalize=================================================================================================
         elif self.multi_objective_aggregation == "sum_then_normalize":
             # Apply weights to each reward function's output and sum
             # print(self.reward_weights.to(device).unsqueeze(0)) # tensor([[1., 1., 1.]], device='cuda:0')

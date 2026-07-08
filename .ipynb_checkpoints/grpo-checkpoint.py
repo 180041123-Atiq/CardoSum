@@ -54,7 +54,7 @@ if __name__ == '__main__':
     # exit()
     
     config = GRPOConfig(
-        output_dir="./HVO",
+        output_dir="./AWGRPO",
     
         num_generations=4,
         per_device_train_batch_size=16,
@@ -77,31 +77,31 @@ if __name__ == '__main__':
         save_only_model=True,            # avoids optimizer states
     
         reward_weights=[-1.0, -1.0, -1.0],
-        multi_objective_aggregation='HVO',
+        multi_objective_aggregation='AWGRPO',
 
-        logging_steps=0.002,              # log every N steps
+        logging_steps=1,              # log every N steps
         report_to="tensorboard", 
     )
 
     # simple finetuning
-    # peft_config = LoraConfig(
-    #     r=8,
-    #     lora_alpha=16,
-    #     target_modules=["q_proj", "v_proj"],
-    #     lora_dropout=0.05,
-    #     bias="none",
-    #     task_type="CAUSAL_LM",
-    # )
-
-    # for hard generation task
     peft_config = LoraConfig(
-        r=16,
-        lora_alpha=32,
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+        r=8,
+        lora_alpha=16,
+        target_modules=["q_proj", "v_proj"],
         lora_dropout=0.05,
         bias="none",
         task_type="CAUSAL_LM",
     )
+
+    # for hard generation task
+    # peft_config = LoraConfig(
+    #     r=16,
+    #     lora_alpha=32,
+    #     target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+    #     lora_dropout=0.05,
+    #     bias="none",
+    #     task_type="CAUSAL_LM",
+    # )
     
     trainer = CSRTrainer(
         model="unsloth/Llama-3.2-3B-Instruct-bnb-4bit",
@@ -112,8 +112,9 @@ if __name__ == '__main__':
         peft_config=peft_config,
     )
 
-    resume_from_checkpoint = 'HVO/checkpoint-720'
-    if resume_from_checkpoint != None:
+    # resume_from_checkpoint = 'HVO/checkpoint-720'
+    resume_from_checkpoint = None
+    if resume_from_checkpoint == None:
         trainer.train()
     else:
         trainer.train(resume_from_checkpoint=resume_from_checkpoint)
