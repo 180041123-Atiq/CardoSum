@@ -42,6 +42,8 @@ class CSRTrainer(GRPOTrainer):
             deque(maxlen=self._history_window),  
             deque(maxlen=self._history_window),  
         ]
+
+        self.current_weights = [1.0, 1.0, 1.0]
     
     def _generate_and_score_completions(
         self, inputs: list[dict[str, torch.Tensor | Any]]
@@ -335,8 +337,8 @@ class CSRTrainer(GRPOTrainer):
             _min_weight = 0.1  
             _max_weight = 0.8 
 
-            
-
+            # avg_rewards = batch_rewards.mean(axis=(0,1))
+            # reward history
             for ii in range(num_unique_prompts):
                 avg_reward = []
                 # reward_per_eval_dim = [0,0,0]
@@ -351,17 +353,38 @@ class CSRTrainer(GRPOTrainer):
                     self.awgrpo_reward_history[i].append(avg_reward[i])
                 
 
+            rewards_per_prompt = []
             for ii in range(num_unique_prompts):
+                reward_per_gen = []
                 for jj in range(num_generations):
+                    weight_updates = []
+                    new_weights = []
                     for kk in range(eval_dim):
 
                         # Calculating the slopes
-                        if len(rewards_per_func[ii][jj]) < 2:
+                        if len(self.awgrpo_reward_history[kk]) < 2:
                             return 0.0
-                        x = np.arange(len(rewards_per_func[ii][jj]))
-                        slope, _ = np.polyfit(x, rewards_per_func[ii][jj], 1)
+                        x = np.arange(len(awgrpo_reward_history[kk]))
+                        slope, _ = np.polyfit(x, awgrpo_reward_history[kk], 1)
 
-                        weight_t1 = np.clip(rewards_per_func[ii][jj][kk]*(np.exp(-1 * slope[ii][jj])), _min_weight, _max_weight)
+                        weight_next = np.clip(current_weights[kk]*(np.exp(-1 * slope)), _min_weight, _max_weight)
+                        weight_updates.append(weight_next)
+
+                    weights_sum = np.sum(weight_updates)
+                    
+                    for j in range(len(wight_updates)):
+                        updated = weight_updates[i]/weights_sum
+                        self.current_weights[i] = updated
+                        new_weights.append(updated)
+
+                    reward_sum = 0
+                    for k in range(eval_dim):
+                        reward_sum = reward_sum + (new_weights[i]*rewards_per_func[ii][jj][k])
+                    
+                    reward_per_gen.append(reward_sum)
+
+                rewards_per_prompt.append(reward_per_gen)
+
             
 
 
