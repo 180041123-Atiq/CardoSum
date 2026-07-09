@@ -317,8 +317,126 @@ class CSRTrainer(GRPOTrainer):
         # print(rewards_per_func.size()) # (4,3)
         # exit()
 
+        # Ours=========================================================================================================
+        if self.multi_objective_aggregation == "Ours":
+            dtype_rpf = rewards_per_func.dtype
+            device_rpf = rewards_per_func.device
+            # print(dtype_rpf)
+            # print(device_rpf)
+            rewards_per_func = rewards_per_func.cpu().numpy()
+            # print(rewards_per_func)
+            # print()
+            rewards_per_func =  rewards_per_func.reshape(-1,num_generations,rewards_per_func.shape[-1])
+            # print(rewards_per_func)
+            # print(rewards_per_func.shape) # (4,3)
+            # exit()
+
+            num_unique_prompts, _, eval_dim = rewards_per_func.shape
+            
+            _min_weight = 0.1  
+            _max_weight = 0.8 
+
+            DELTA = 0.1
+            EPSILON = 0.99
+
+
+            num_unique_prompts, _, eval_dim = rewards_per_func.shape
+            min_reward_per_eval_dim = np.full((num_unique_prompts,eval_dim),10000.0)
+            for ii in range(num_unique_prompts):
+                for jj in range(eval_dim):
+                    for kk in range(num_generations):
+                        min_reward_per_eval_dim[ii][jj] = min(min_reward_per_eval_dim[ii][jj],rewards_per_func[ii][kk][jj])
+
+            
+            
+            for ii in range(num_unique_prompts):
+                for jj in range(num_generations):
+                    for kk in range(eval_dim):
+                        rewards_per_func[ii][jj][kk] = min(EPSILON, rewards_per_func[ii][jj][kk] - min_reward_per_eval_dim[ii][kk] + DELTA)
+
+            # avg_rewards = batch_rewards.mean(axis=(0,1))
+            # reward history
+            for ii in range(num_unique_prompts):
+                avg_reward = []
+                # reward_per_eval_dim = [0,0,0]
+                for jj in range(eval_dim):
+                    reward_value = 0
+                    for kk in range(num_generations):
+                        reward_value = reward_value + rewards_per_func[ii][kk][jj]
+                    
+                    avg_reward_value = reward_value/num_generations
+                    avg_reward.append(avg_reward_value)
+                for i in range(3):
+                    self.awgrpo_reward_history[i].append(avg_reward[i])
+                
+
+            rewards_per_prompt = []
+            for ii in range(num_unique_prompts):
+                reward_per_gen = []
+                for jj in range(num_generations):
+                    weight_updates = []
+                    new_weights = []
+                    for kk in range(eval_dim):
+
+                        # Calculating the slopes
+                        if len(self.awgrpo_reward_history[kk]) < 2:
+                            raise Exception('Reward History should have more than 2 rewards')
+                        x = np.arange(len(self.awgrpo_reward_history[kk]))
+                        slope, _ = np.polyfit(x, self.awgrpo_reward_history[kk], 1)
+
+                        weight_next = np.clip(self.current_weights[kk]*(np.exp(-1 * slope)), _min_weight, _max_weight)
+                        weight_updates.append(weight_next)
+
+                    weights_sum = np.sum(weight_updates)
+                    
+                    for j in range(len(weight_updates)):
+                        updated = weight_updates[j]/weights_sum
+                        self.current_weights[j] = updated
+                        new_weights.append(updated)
+
+                    reward_sum = 0
+                    for k in range(eval_dim):
+                        reward_sum = reward_sum + (new_weights[k]*rewards_per_func[ii][jj][k])
+                    
+                    reward_per_gen.append(reward_sum)
+
+                rewards_per_prompt.append(reward_per_gen)
+            
+            rewards = torch.tensor(rewards_per_prompt,dtype=dtype_rpf,device=device_rpf)
+            rewards = rewards.reshape(num_unique_prompts*num_generations)
+            rewards_per_func = rewards_per_func.reshape(num_unique_prompts*num_generations,eval_dim)
+            rewards_per_func = torch.tensor(rewards_per_func, dtype=dtype_rpf, device=device_rpf)
+            # print(rewards)
+            # print(rewards.shape)
+            # exit()
+
+            mean_grouped_rewards = rewards.view(-1, num_generations).mean(dim=1)
+            mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(num_generations, dim=0)
+            if self.scale_rewards in ["group", "none"]:
+                # If self.scale_rewards = "none", we'll only use std_rewards to check for zero std for logging
+                if num_generations > 1:
+                    std_rewards = rewards.view(-1, num_generations).std(dim=1)
+                    std_rewards = std_rewards.repeat_interleave(num_generations, dim=0)
+                else:  # doesn't occur during training, but could occur in eval when num_generations_eval=1
+                    std_rewards = torch.zeros_like(rewards)
+            elif self.scale_rewards == "batch":
+                # Compute global std
+                if rewards.numel() > 1:
+                    std_rewards = rewards.std().expand_as(rewards)
+                else:  # doesn't occur during training, but could occur in eval when num_generations_eval=batch_size=1
+                    std_rewards = torch.zeros_like(rewards)
+            else:
+                raise ValueError(
+                    f"Invalid value for scale_rewards: {self.scale_rewards}. Must be one of 'batch', 'group', or 'none'."
+                )
+
+            advantages = rewards - mean_grouped_rewards
+            if self.scale_rewards != "none":
+                advantages = advantages / (std_rewards + 1e-4)
+            is_std_zero = torch.isclose(std_rewards, torch.zeros_like(std_rewards))  # for logging
+
         # AWGRPO=========================================================================================================
-        if self.multi_objective_aggregation == "AWGRPO":
+        elif self.multi_objective_aggregation == "AWGRPO":
 
             dtype_rpf = rewards_per_func.dtype
             device_rpf = rewards_per_func.device
