@@ -4,10 +4,16 @@ from peft import LoraConfig
 
 def preprocess_function(sample):
     return {
-        "prompt": [{"role": "user", "content": sample["Original_Report"]}],
-        "completion": [
-            {"role": "assistant", "content": f"{sample['GPT_Summary']}"}
-        ],
+        "messages": [
+            {
+                "role": "user",
+                "content": sample["Original_Report"],
+            },
+            {
+                "role": "assistant",
+                "content": sample["GPT_Summary"],
+            },
+        ]
     }
 
 if __name__ == '__main__':
@@ -32,33 +38,37 @@ if __name__ == '__main__':
         task_type="CAUSAL_LM",
         target_modules=[
             "q_proj",
-            # "k_proj",
+            "k_proj",
             "v_proj",
-            # "o_proj",
-            # "gate_proj",
-            # "up_proj",
-            # "down_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
         ],
     )
     
     config = SFTConfig(
         output_dir='output_sft',
-        per_device_train_batch_size=2,
-        num_train_epochs=1,
+        per_device_train_batch_size=8,
+        num_train_epochs=3,
         learning_rate=1e-5,
         lr_scheduler_type="cosine",
-        warmup_steps=0.05,
+        warmup_ratio=0.05,
         
+        save_strategy="steps",
         save_steps=0.2,
+        
+        eval_on_start=True,
         eval_strategy='steps',
         eval_steps=0.2,
 
-        load_best_model_at_end=True,
-        metric_for_best_model="eval_loss",
-        greater_is_better=False,
+        # load_best_model_at_end=True,
+        # metric_for_best_model="eval_loss",
+        # greater_is_better=False,
 
-        save_total_limit=1,
+        # save_total_limit=1,
         
+        logging_strategy="steps",
         logging_steps=1,              
         report_to="tensorboard",
     )
