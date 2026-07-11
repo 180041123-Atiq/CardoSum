@@ -7,7 +7,7 @@ import pandas as pd
 import random
 
 # will try to use the tokenizer the model is using for tokenization
-llama_tok_concise_rew = AutoTokenizer.from_pretrained("unsloth/Llama-3.2-3B-Instruct-bnb-4bit")
+llama_tok_concise_rew = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-3B-Instruct")
 sim_model = SentenceTransformer("all-MiniLM-L6-v2")
 
 def hyper_params_csr(paths=None):
@@ -75,10 +75,11 @@ def calc_similarity_reward(completions, reference, **kwargs):
 
 def calc_concise_reward(prompts, completions, **kwargs):
     rewards = []
+    initial_prompt = 'Please explain the following Echocardiography report. '
     for prompt, completion in zip(prompts, completions):
         prompt = prompt[0]['content']
         completion = completion[0]['content']
-        report = prompt.split("### Report:")[-1].split("### Summary:")[0]
+        report = prompt.split(initial_prompt)[1]
 
         # print(report)
         # print()

@@ -7,15 +7,6 @@ import os
 
 from csr_reward_fn import calc_similarity_reward, calc_readability_reward, calc_concise_reward
 
-os.environ["TENSORBOARD_LOGGING_DIR"] = "./logs"
-
-alpaca_prompt_grpo = """Below is an echocardiography report. Summarize it in clear, patient-friendly language.
-
-### Report:
-{}
-
-### Summary:"""
-
 def get_dataset_dict(paths):
     dataset_dict = {}
     for k,v in paths.items():
@@ -25,97 +16,92 @@ def get_dataset_dict(paths):
             "Original_Report": "prompt",
             "GPT_Summary": "reference"
         })
-        
-        initial_prompt = 'Please explain the following Echocardiography report. '
-        for ii in range(df.shape[0]):
-            if initial_prompt in df.loc[ii,'prompt']:
-                df_str = df.loc[ii,'prompt']
-                df.loc[ii,'prompt'] = df_str.split(initial_prompt)[1]
 
-        df['prompt'] = df['prompt'].apply(lambda x: [{"role": "user", "content": alpaca_prompt_grpo.format(x)}])
+        df['prompt'] = df['prompt'].apply(lambda x: [{"role": "user", "content": x}])
 
         dataset_dict[k] = Dataset.from_pandas(df)
 
     return dataset_dict
 
-    
-
 if __name__ == '__main__':
-
+ 
     paths = {
-        'train': 'train.csv',
+        'train': 'grpo_train.csv',
         'val': 'val.csv',
-        'test': 'test.csv'
     }
     dataset_dict = get_dataset_dict(paths)
-    # print(len(dataset_dict['train']))
-    # print(len(dataset_dict['val']))
-    # print(len(dataset_dict['test']))
-    # exit()
     
     config = GRPOConfig(
-        output_dir="./AWGRPO",
+        output_dir="./output_grpo",
     
         num_generations=4,
         per_device_train_batch_size=16,
+        num_train_epochs=3,
         
-        learning_rate=3e-6,
+        learning_rate=1e-6,
         lr_scheduler_type="cosine",
         warmup_steps=0.05,
         
         max_completion_length=640, # since max prompt can be 707, compression is 1.12, so ref should be 707/1.12 = 640
-        num_iterations=1,
-    
-        # eval_strategy="steps",
-        # eval_steps=0.1,
+
+        eval_on_start=True,
+        eval_strategy="steps",
+        eval_steps=0.2,
     
         save_strategy="steps",
         save_steps=0.2,
-        save_total_limit=1,             
-        load_best_model_at_end=False,
     
-        save_only_model=True,            # avoids optimizer states
-    
-        reward_weights=[-1.0, -1.0, -1.0],
-        multi_objective_aggregation='AWGRPO',
-
+        # reward_weights=[-1.0, -1.0, -1.0],
+        # multi_objective_aggregation='AWGRPO',
+        logging_strategy='steps',
         logging_steps=1,              # log every N steps
         report_to="tensorboard", 
     )
 
-    # simple finetuning
     peft_config = LoraConfig(
         r=8,
         lora_alpha=16,
-        target_modules=["q_proj", "v_proj"],
         lora_dropout=0.05,
         bias="none",
         task_type="CAUSAL_LM",
+        target_modules=[
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+        ],
     )
 
-    # for hard generation task
-    # peft_config = LoraConfig(
-    #     r=16,
-    #     lora_alpha=32,
-    #     target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
-    #     lora_dropout=0.05,
-    #     bias="none",
-    #     task_type="CAUSAL_LM",
-    # )
+    model_name = 'meta-llama/Llama-3.2-3B-Instruct'
+    lora_path = 'output_sft/checkpoint-2250'
+    
+    processing_class = AutoTokenizer.from_pretrained(model_name)
+
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        dtype='auto',
+        device_map='auto'
+    )
+
+    model = PeftModel.from_pretrained(
+        model,
+        lora_path,
+        device_map="auto",
+        is_trainable=True,
+    )
     
     trainer = CSRTrainer(
-        model="unsloth/Llama-3.2-3B-Instruct-bnb-4bit",
+        model=model,
+        prcessing_class=processing_class,
         reward_funcs=[calc_similarity_reward, calc_readability_reward, calc_concise_reward],
         args=config,
         train_dataset=dataset_dict['train'],
-        # eval_dataset=dataset_dict['val'].select(range(100)), # just for sanity checking
+        eval_dataset=dataset_dict['val'],
         peft_config=peft_config,
     )
 
-    # resume_from_checkpoint = 'HVO/checkpoint-720'
-    resume_from_checkpoint = None
-    if resume_from_checkpoint == None:
-        trainer.train()
-    else:
-        trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+    trainer.train()
     

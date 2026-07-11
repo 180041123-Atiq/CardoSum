@@ -6,6 +6,8 @@ from transformers import (
 from peft import PeftModel
 from datasets import load_dataset
 from evaluate import load as eval_load
+import os
+from tqdm import tqdm
 
 class LLMInference:
 
@@ -16,14 +18,6 @@ class LLMInference:
     ):
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-        if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
-
-        model_kwargs = dict(
-            trust_remote_code=True,
-            device_map="auto",
-        )
 
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
@@ -54,22 +48,23 @@ class LLMInference:
             {"role": "user", "content": prompt},
         ]
 
-        input_ids = self.tokenizer.apply_chat_template(
+        inputs = self.tokenizer.apply_chat_template(
             messages,
             tokenize=True,
             add_generation_prompt=True,
             return_tensors="pt",
+            return_dict=True,
         ).to(self.model.device)
-
+        
         outputs = self.model.generate(
-            input_ids,
+            **inputs,
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             top_p=top_p,
             do_sample=do_sample,
         )
-
-        generated = outputs[0][input_ids.shape[1]:]
+        
+        generated = outputs[0][inputs["input_ids"].shape[1]:]
 
         return self.tokenizer.decode(
             generated,
@@ -106,7 +101,7 @@ def eval_score(preds, refs, file_name):
 if __name__ == "__main__":
 
     MODEL_NAME = "meta-llama/Llama-3.2-3B-Instruct"
-    ADAPTER = "./lora_checkpoint"
+    ADAPTER = "output_sft/checkpoint-2250"
 
     llm = LLMInference(
         model_name=MODEL_NAME,
@@ -118,10 +113,16 @@ if __name__ == "__main__":
         data_files="test.csv",
     )['train']
 
-    for sample in test_dataset:
+    output_dir = 'output_sft/outputs'
+    os.makedirs(output_dir, exist_ok=True)
+    sample_cnt = 0
+    
+    for sample in tqdm(test_dataset, total=len(test_dataset), desc=f'Inferencing {MODEL_NAME}'):
         response = llm.generate(
-            sample['Original_Report'],
+            prompt=sample['Original_Report'],
             max_new_tokens=430,
         )
     
-        print(response)
+        with open(f'{output_dir}/{sample_cnt}.txt','w') as f:
+            f.write(response)
+        sample_cnt += 1
