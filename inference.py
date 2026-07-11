@@ -13,8 +13,6 @@ class LLMInference:
         self,
         model_name,
         adapter_path=None,
-        device="cuda",
-        dtype='auto',
     ):
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -110,22 +108,20 @@ if __name__ == "__main__":
     MODEL_NAME = "meta-llama/Llama-3.2-3B-Instruct"
     ADAPTER = "./lora_checkpoint"
 
+    llm = LLMInference(
+        model_name=MODEL_NAME,
+        adapter_path=ADAPTER,
+    )
+
     test_dataset = load_dataset(
         "csv",
         data_files="test.csv",
     )['train']
 
-    # llm = LLMInference(
-    #     model_name=MODEL_NAME,
-    #     adapter_path=ADAPTER,
-    # )
-
-    # prompt = "Explain reinforcement learning in simple words."
-
-    # response = llm.generate(
-    #     prompt,
-    #     max_new_tokens=256,
-    #     temperature=0.7,
-    # )
-
-    # print(response)
+    for sample in test_dataset:
+        response = llm.generate(
+            sample['Original_Report'],
+            max_new_tokens=430,
+        )
+    
+        print(response)
