@@ -4,6 +4,11 @@ from trl import GRPOConfig
 from csr_trainer import CSRTrainer
 from peft import LoraConfig
 import os
+from transformers import (
+    AutoTokenizer,
+    AutoModelForCausalLM,
+)
+from peft import PeftModel
 
 from csr_reward_fn import calc_similarity_reward, calc_readability_reward, calc_concise_reward
 
@@ -36,17 +41,17 @@ if __name__ == '__main__':
     
         num_generations=4,
         per_device_train_batch_size=16,
-        num_train_epochs=3,
+        num_train_epochs=1,
         
         learning_rate=1e-6,
         lr_scheduler_type="cosine",
-        warmup_steps=0.05,
+        warmup_ratio=0.05,
         
         max_completion_length=640, # since max prompt can be 707, compression is 1.12, so ref should be 707/1.12 = 640
 
-        eval_on_start=True,
-        eval_strategy="steps",
-        eval_steps=0.2,
+        # eval_on_start=True,
+        # eval_strategy="steps",
+        # eval_steps=0.2,
     
         save_strategy="steps",
         save_steps=0.2,
@@ -58,22 +63,22 @@ if __name__ == '__main__':
         report_to="tensorboard", 
     )
 
-    peft_config = LoraConfig(
-        r=8,
-        lora_alpha=16,
-        lora_dropout=0.05,
-        bias="none",
-        task_type="CAUSAL_LM",
-        target_modules=[
-            "q_proj",
-            "k_proj",
-            "v_proj",
-            "o_proj",
-            "gate_proj",
-            "up_proj",
-            "down_proj",
-        ],
-    )
+    # peft_config = LoraConfig(
+    #     r=8,
+    #     lora_alpha=16,
+    #     lora_dropout=0.05,
+    #     bias="none",
+    #     task_type="CAUSAL_LM",
+    #     target_modules=[
+    #         "q_proj",
+    #         "k_proj",
+    #         "v_proj",
+    #         "o_proj",
+    #         "gate_proj",
+    #         "up_proj",
+    #         "down_proj",
+    #     ],
+    # )
 
     model_name = 'meta-llama/Llama-3.2-3B-Instruct'
     lora_path = 'output_sft/checkpoint-2250'
@@ -95,12 +100,11 @@ if __name__ == '__main__':
     
     trainer = CSRTrainer(
         model=model,
-        prcessing_class=processing_class,
+        processing_class=processing_class,
         reward_funcs=[calc_similarity_reward, calc_readability_reward, calc_concise_reward],
         args=config,
         train_dataset=dataset_dict['train'],
-        eval_dataset=dataset_dict['val'],
-        peft_config=peft_config,
+        # eval_dataset=dataset_dict['val'],
     )
 
     trainer.train()

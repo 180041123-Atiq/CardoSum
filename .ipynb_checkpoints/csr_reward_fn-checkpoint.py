@@ -61,8 +61,10 @@ def calc_similarity_reward(completions, reference, **kwargs):
     for completion, ref in zip(completions, reference):
 
         # print(type(completion[0]['content']))
+        # print(completion[0]['content'])
         # print()
         # print(type(ref))
+        # print(ref)
         # exit()
         
         embeddings = sim_model.encode([completion[0]['content'], ref])
