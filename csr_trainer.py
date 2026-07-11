@@ -410,6 +410,8 @@ class CSRTrainer(GRPOTrainer):
             # print(rewards.shape)
             # exit()
 
+            rewards = torch.prod(reward_per_func, dim=1)
+
             mean_grouped_rewards = rewards.view(-1, num_generations).mean(dim=1)
             mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(num_generations, dim=0)
             if self.scale_rewards in ["group", "none"]:
