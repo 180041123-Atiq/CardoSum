@@ -1,8 +1,56 @@
 import zipfile
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 import numpy as np
-from transformers import AutoTokenizer
-from datasets import load_dataset
+# from transformers import AutoTokenizer
+# from datasets import load_dataset
+
+def conv_icl2(exp1, exp2, exp3):
+    return [
+        {
+            "role": "system",
+            "content": (
+                "You are a clinical communication expert who "
+                "explains echocardiography reports in clear, accurate, "
+                "patient-friendly language."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                "Below are two examples showing how to summarize an "
+                "echocardiography report into an easy-to-understand explanation.\n\n"
+
+                "### Example 1\n"
+                "Input:\n"
+                + exp1['Original_Report'].split(
+                    "Please explain the following Echocardiography report."
+                )[1]
+                + "\n\n"
+                "Output:\n"
+                + exp1['GPT_Summary']
+                + "\n\n"
+
+                "### Example 2\n"
+                "Input:\n"
+                + exp2['Original_Report'].split(
+                    "Please explain the following Echocardiography report."
+                )[1]
+                + "\n\n"
+                "Output:\n"
+                + exp2['GPT_Summary']
+                + "\n\n"
+
+                "Now explain the following report in the same way.\n\n"
+
+                "Input:\n"
+                + exp3['Original_Report'].split(
+                    "Please explain the following Echocardiography report."
+                )[1]
+                + "\n\n"
+                "Output:"
+            ),
+        },
+    ]
 
 def unzip_file(source_file, out_dir):
     with zipfile.ZipFile(source_file, 'r') as zip_ref:
@@ -14,8 +62,30 @@ def tensorboard_event_reader(file_path):
     ea = EventAccumulator(file_path)
     ea.Reload()
     
-    eval_loss = ea.Scalars("eval/loss")
-    print(eval_loss)
+    # print(ea.Tags())
+    # print(ea.Scalars('train/reward'))
+    # eval_loss = ea.Scalars("eval/loss")
+    # print(eval_loss)
+
+    reward_events = ea.Scalars("train/reward")
+    calc_similarity_events = ea.Scalars('train/rewards/calc_similarity_reward/mean')
+    calc_concise_events = ea.Scalars('train/rewards/calc_concise_reward/mean')
+    calc_readability_events = ea.Scalars('train/rewards/calc_readability_reward/mean')
+    for event in reward_events:
+        if event.step in [100, 200, 300, 400, 500]:
+            print(f"Step {event.step}: Reward = {event.value:.4f}")
+    for event in calc_similarity_events:
+        if event.step in [100, 200, 300, 400, 500]:
+            print(f"Step {event.step}: Similarity Reward Mean = {event.value:.4f}")
+    for event in calc_concise_events:
+        if event.step in [100, 200, 300, 400, 500]:
+            print(f"Step {event.step}: Concise Reward Mean = {event.value:.4f}")
+    for event in calc_readability_events:
+        if event.step in [100, 200, 300, 400, 500]:
+            print(f"Step {event.step}: Redability Reward Mean = {event.value:.4f}")
+    
+    
+
 
 def token_count():
 
@@ -55,8 +125,8 @@ def token_count():
     print(f"99th percentile   : {np.percentile(lengths,99):.2f}")
 
 if __name__ == '__main__':
-    token_count()
-    # tensorboard_event_reader('runs\Jul10_19-45-30_c51a494ff5d9\events.out.tfevents.1783712730.c51a494ff5d9.3314.0')
+    # token_count()
+    tensorboard_event_reader('runs\Jul11_19-17-20_2dcca8eec300\events.out.tfevents.1783797440.2dcca8eec300.8151.0')
     # pass
     # # print(gen_layout_prompt(106))
     # # plot_graph()

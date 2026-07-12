@@ -5,9 +5,10 @@ from transformers import (
 )
 from peft import PeftModel
 from datasets import load_dataset
-from evaluate import load as eval_load
 import os
 from tqdm import tqdm
+
+from utils import conv_icl2
 
 class LLMInference:
 
@@ -43,10 +44,14 @@ class LLMInference:
         top_p=0.9,
         do_sample=True,
     ):
-
-        messages = [
-            {"role": "user", "content": prompt},
-        ]
+        if isinstance(prompt, str):
+            messages = [
+                {"role": "user", "content": prompt},
+            ]
+        elif isinstance(prompt, list):
+            messages = prompt
+        else:
+            raise Exception('Unsupported Format for prompt')
 
         inputs = self.tokenizer.apply_chat_template(
             messages,
@@ -72,36 +77,11 @@ class LLMInference:
         )
 
 
-
-def eval_score(preds, refs, file_name):
-    rouge = eval_load("rouge")
-    bertscore = eval_load("bertscore")
-
-    # Suppose you have one prediction and one ground truth
-    # pred = "Your echocardiography report shows mild mitral regurgitation..."
-    # ref = "The echocardiogram reveals mild mitral regurgitation with normal LV function."
-
-    # # Wrap them in lists
-    # preds = [pred]
-    # refs = [ref]
-
-    # Compute metrics
-    rouge_res = rouge.compute(predictions=preds, references=refs)
-    bert_res = bertscore.compute(predictions=preds, references=refs, lang="en")
-
-    print({
-        "ROUGE-L": rouge_res["rougeL"],
-        "BERTScore-F1": sum(bert_res["f1"]) / len(bert_res["f1"]),
-    })
-
-    with open(os.path.join(OUTPUT_DIR,file_name),'w') as f:
-        f.write(f"ROUGE-L: {rouge_res['rougeL']}\n")
-        f.write(f"BERTScore-F1: {sum(bert_res['f1']) / len(bert_res['f1'])}")
-
 if __name__ == "__main__":
 
     MODEL_NAME = "meta-llama/Llama-3.2-3B-Instruct"
-    ADAPTER = "output_sft/checkpoint-2250"
+    # ADAPTER = "output_grpo/checkpoint-200"
+    ADAPTER = None
 
     llm = LLMInference(
         model_name=MODEL_NAME,
@@ -112,14 +92,21 @@ if __name__ == "__main__":
         "csv",
         data_files="test.csv",
     )['train']
+    train_dataset = load_dataset(
+        "csv",
+        data_files="train.csv",
+    )['train']
+    exp1,exp2 = train_dataset[4], train_dataset[6]
 
-    output_dir = 'output_sft/outputs'
+    output_dir = 'output_icl2/icl2_outputs'
     os.makedirs(output_dir, exist_ok=True)
     sample_cnt = 0
     
     for sample in tqdm(test_dataset, total=len(test_dataset), desc=f'Inferencing {MODEL_NAME}'):
+        # print(conv_icl2(exp1,exp2,sample))
+        # break
         response = llm.generate(
-            prompt=sample['Original_Report'],
+            prompt = conv_icl2(exp1,exp2,sample),
             max_new_tokens=430,
         )
     

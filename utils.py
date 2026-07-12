@@ -4,6 +4,54 @@ import numpy as np
 # from transformers import AutoTokenizer
 # from datasets import load_dataset
 
+def conv_icl2(exp1, exp2, exp3):
+    return [
+        {
+            "role": "system",
+            "content": (
+                "You are a clinical communication expert who "
+                "explains echocardiography reports in clear, accurate, "
+                "patient-friendly language."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                "Below are two examples showing how to summarize an "
+                "echocardiography report into an easy-to-understand explanation.\n\n"
+
+                "### Example 1\n"
+                "Input:\n"
+                + exp1['Original_Report'].split(
+                    "Please explain the following Echocardiography report."
+                )[1]
+                + "\n\n"
+                "Output:\n"
+                + exp1['GPT_Summary']
+                + "\n\n"
+
+                "### Example 2\n"
+                "Input:\n"
+                + exp2['Original_Report'].split(
+                    "Please explain the following Echocardiography report."
+                )[1]
+                + "\n\n"
+                "Output:\n"
+                + exp2['GPT_Summary']
+                + "\n\n"
+
+                "Now explain the following report in the same way.\n\n"
+
+                "Input:\n"
+                + exp3['Original_Report'].split(
+                    "Please explain the following Echocardiography report."
+                )[1]
+                + "\n\n"
+                "Output:"
+            ),
+        },
+    ]
+
 def unzip_file(source_file, out_dir):
     with zipfile.ZipFile(source_file, 'r') as zip_ref:
         zip_ref.extractall(out_dir)
