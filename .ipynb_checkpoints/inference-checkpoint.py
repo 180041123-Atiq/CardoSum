@@ -80,8 +80,8 @@ class LLMInference:
 if __name__ == "__main__":
 
     MODEL_NAME = "meta-llama/Llama-3.2-3B-Instruct"
-    # ADAPTER = "output_grpo/checkpoint-200"
-    ADAPTER = None
+    ADAPTER = "output_awgrpo/checkpoint-200"
+    # ADAPTER = None
 
     llm = LLMInference(
         model_name=MODEL_NAME,
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     )['train']
     exp1,exp2 = train_dataset[4], train_dataset[6]
 
-    output_dir = 'output_icl2/icl2_outputs'
+    output_dir = 'output_awgrpo/awgrpo_outputs_200'
     os.makedirs(output_dir, exist_ok=True)
     sample_cnt = 0
     
@@ -106,7 +106,8 @@ if __name__ == "__main__":
         # print(conv_icl2(exp1,exp2,sample))
         # break
         response = llm.generate(
-            prompt = conv_icl2(exp1,exp2,sample),
+            # prompt = conv_icl2(exp1,exp2,sample),
+            prompt = sample['Original_Report'],
             max_new_tokens=430,
         )
     

@@ -5,6 +5,8 @@ import numpy as np
 import textstat
 import pandas as pd
 import random
+from datasets import load_dataset
+from tqdm import tqdm
 
 # will try to use the tokenizer the model is using for tokenization
 llama_tok_concise_rew = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-3B-Instruct")
@@ -66,8 +68,10 @@ def calc_similarity_reward(completions, reference, **kwargs):
         # print(type(ref))
         # print(ref)
         # exit()
-        
-        embeddings = sim_model.encode([completion[0]['content'], ref])
+        if isinstance(completion,str):
+            embeddings = sim_model.encode([completion, ref])
+        else:
+            embeddings = sim_model.encode([completion[0]['content'], ref])
 
         score = cosine_similarity([embeddings[0]],[embeddings[1]])[0][0]
         score = max(0.0, min(1.0, score))
@@ -79,8 +83,10 @@ def calc_concise_reward(prompts, completions, **kwargs):
     rewards = []
     initial_prompt = 'Please explain the following Echocardiography report. '
     for prompt, completion in zip(prompts, completions):
-        prompt = prompt[0]['content']
-        completion = completion[0]['content']
+        if not isinstance(prompt,str):
+            prompt = prompt[0]['content']
+        if not isinstance(completion, str):
+            completion = completion[0]['content']
         report = prompt.split(initial_prompt)[1]
 
         # print(report)
@@ -108,7 +114,12 @@ def calc_readability_reward(completions, **kwargs):
     
     rewards = []
     for ii, completion in enumerate(completions):
-        smog_id = textstat.smog_index(completion[0]['content'])
+        # print(type(completion))
+        # exit()
+        if isinstance(completion,str):
+            smog_id = textstat.smog_index(completion)
+        else:
+            smog_id = textstat.smog_index(completion[0]['content'])
         rewards.append(np.exp(-abs(smog_id - mean_smog) / std_smog))
 
     return rewards
@@ -126,5 +137,33 @@ def reward_fn(prompts, completions, reference, **kwargs):
     
 
 if __name__ == '__main__':
+    prompts,completions,references = [],[],[]
+    test_dataset = load_dataset(
+        "csv",
+        data_files="test.csv",
+    )['train']
+    # output_dir = 'output_awgrpo/grpo_outputs'
+    # output_dir = 'output_awgrpo/awgrpo_outputs'
+    # output_dir = 'output_awgrpo/sft_outputs'
+    # output_dir = 'output_awgrpo/icl2_outputs/icl2_outputs'
+    # output_dir = 'output_awgrpo/icl2_outputs/meditron7b_icl2_outputs'
+    # output_dir = 'output_awgrpo/icl2_outputs/vicuna7b_icl2_outputs'
+    output_dir = 'output_awgrpo/llama8b_icl2_outputs'
+    
+    for ii,sample in enumerate(tqdm(test_dataset, total=len(test_dataset), desc='Converting samples for reward calc')):
+        prompts.append(sample['Original_Report'])
+        references.append(sample['GPT_Summary'])
+        completion = ''
+        with open(f'{output_dir}/{ii}.txt','r') as f:
+            completion = f.read()
+        
+        completions.append(completion)
 
-    reward_fn(prompts=None, completions=None, reference=None)
+    readability_rewards = calc_readability_reward(completions)
+    conciseness_rewards = calc_concise_reward(prompts,completions)
+    similarity_rewards = calc_similarity_reward(completions,references)
+    
+    print('avg readability', sum(readability_rewards)/len(readability_rewards))
+    print('avg conciseness', sum(conciseness_rewards)/len(conciseness_rewards))
+    print('avg similarity', sum(similarity_rewards)/len(similarity_rewards))
+    # reward_fn(prompts=None, completions=None, reference=None)

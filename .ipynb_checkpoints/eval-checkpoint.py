@@ -30,7 +30,7 @@ def eval_score(preds, refs, file_name):
 if __name__ == '__main__':
     preds, refs = [], []
     test_dataset = load_dataset('csv',data_files='test.csv')['train']
-    pred_dir = 'output_grpo/grpo_outputs'
+    pred_dir = 'output_awgrpo/awgrpo_outputs_200'
     for ii,sample in enumerate(tqdm(test_dataset,total=len(test_dataset),desc='Converting samples for eval')):
         # print(sample)
         # break
@@ -45,4 +45,4 @@ if __name__ == '__main__':
         preds.append(pred)
         refs.append(ref)
         
-    eval_score(preds,refs,f'{pred_dir.split('/')[0]}/eval_score.txt')
+    eval_score(preds,refs,f'{pred_dir.split('/')[0]}/{pred_dir.split('/')[1]}_eval_score.txt')

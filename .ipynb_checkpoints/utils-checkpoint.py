@@ -72,16 +72,16 @@ def tensorboard_event_reader(file_path):
     calc_concise_events = ea.Scalars('train/rewards/calc_concise_reward/mean')
     calc_readability_events = ea.Scalars('train/rewards/calc_readability_reward/mean')
     for event in reward_events:
-        if event.step in [100, 200, 300, 400, 500]:
+        if event.step in [200, 400, 600, 800, 1000]:
             print(f"Step {event.step}: Reward = {event.value:.4f}")
     for event in calc_similarity_events:
-        if event.step in [100, 200, 300, 400, 500]:
+        if event.step in [200, 400, 600, 800, 1000]:
             print(f"Step {event.step}: Similarity Reward Mean = {event.value:.4f}")
     for event in calc_concise_events:
-        if event.step in [100, 200, 300, 400, 500]:
+        if event.step in [200, 400, 600, 800, 1000]:
             print(f"Step {event.step}: Concise Reward Mean = {event.value:.4f}")
     for event in calc_readability_events:
-        if event.step in [100, 200, 300, 400, 500]:
+        if event.step in [200, 400, 600, 800, 1000]:
             print(f"Step {event.step}: Redability Reward Mean = {event.value:.4f}")
     
     
@@ -126,7 +126,7 @@ def token_count():
 
 if __name__ == '__main__':
     # token_count()
-    tensorboard_event_reader('runs\Jul11_19-17-20_2dcca8eec300\events.out.tfevents.1783797440.2dcca8eec300.8151.0')
+    tensorboard_event_reader('output_awgrpo/runs/Jul15_21-37-05_6ef3283a98b8/events.out.tfevents.1784151425.6ef3283a98b8.8212.0')
     # pass
     # # print(gen_layout_prompt(106))
     # # plot_graph()
