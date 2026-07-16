@@ -37,15 +37,15 @@ if __name__ == '__main__':
     dataset_dict = get_dataset_dict(paths)
     
     config = GRPOConfig(
-        output_dir="./output_grpo",
+        output_dir="./output_awgrpo",
     
         num_generations=4,
         per_device_train_batch_size=16,
-        num_train_epochs=1,
+        num_train_epochs=2,
         
         learning_rate=1e-6,
         lr_scheduler_type="cosine",
-        warmup_ratio=0.05,
+        warmup_steps=0.05,
         
         max_completion_length=640, # since max prompt can be 707, compression is 1.12, so ref should be 707/1.12 = 640
 
@@ -57,7 +57,7 @@ if __name__ == '__main__':
         save_steps=0.2,
     
         # reward_weights=[-1.0, -1.0, -1.0],
-        # multi_objective_aggregation='AWGRPO',
+        multi_objective_aggregation='AWGRPO',
         logging_strategy='steps',
         logging_steps=1,              # log every N steps
         report_to="tensorboard", 
