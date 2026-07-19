@@ -17,12 +17,13 @@ class LLMInference:
         model_name,
         adapter_path=None,
     ):
-
+        self.model_name = model_name
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.tokenizer.truncation_side = "left"
 
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
-            dtype='auto',
+            dtype='auto' if 'medalpaca' not in model_name else torch.float16,
             device_map='auto'
         )
 
@@ -35,6 +36,13 @@ class LLMInference:
 
         self.model.eval()
 
+        if 'medalpaca' in model_name:
+            if self.tokenizer.pad_token_id is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            
+            self.model.config.pad_token_id = self.tokenizer.pad_token_id
+            self.model.generation_config.pad_token_id = self.tokenizer.pad_token_id
+
     @torch.inference_mode()
     def generate(
         self,
@@ -43,23 +51,40 @@ class LLMInference:
         temperature=0.7,
         top_p=0.9,
         do_sample=True,
+        instruct=False,
     ):
-        if isinstance(prompt, str):
-            messages = [
-                {"role": "user", "content": prompt},
-            ]
+        if isinstance(prompt, str): 
+            if instruct:
+                messages = [
+                    {"role": "user", "content": prompt},
+                ]
+            else:
+                messages = [prompt]
         elif isinstance(prompt, list):
             messages = prompt
         else:
             raise Exception('Unsupported Format for prompt')
 
-        inputs = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=True,
-            add_generation_prompt=True,
-            return_tensors="pt",
-            return_dict=True,
-        ).to(self.model.device)
+        model_max_length = self.model.config.max_position_embeddings
+        max_input_length = model_max_length - max_new_tokens
+
+        if instruct:
+            inputs = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                return_tensors="pt",
+                return_dict=True,
+                max_length=max_input_length,
+            ).to(self.model.device)
+        else:
+            inputs = self.tokenizer(
+                messages,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=max_input_length,
+            ).to(self.model.device)
         
         outputs = self.model.generate(
             **inputs,
@@ -79,9 +104,11 @@ class LLMInference:
 
 if __name__ == "__main__":
 
-    MODEL_NAME = "meta-llama/Llama-3.2-3B-Instruct"
-    ADAPTER = "output_awgrpo/checkpoint-200"
-    # ADAPTER = None
+    # MODEL_NAME = "meta-llama/Llama-3.2-3B-Instruct"
+    # MODEL_NAME = "medalpaca/medalpaca-7b"
+    MODEL_NAME = "epfl-llm/meditron-7b"
+    # ADAPTER = "output_awgrpo/checkpoint-200"
+    ADAPTER = None
 
     llm = LLMInference(
         model_name=MODEL_NAME,
@@ -98,7 +125,7 @@ if __name__ == "__main__":
     )['train']
     exp1,exp2 = train_dataset[4], train_dataset[6]
 
-    output_dir = 'output_awgrpo/awgrpo_outputs_200'
+    output_dir = 'output_bad_output/meditron7b'
     os.makedirs(output_dir, exist_ok=True)
     sample_cnt = 0
     
@@ -109,6 +136,7 @@ if __name__ == "__main__":
             # prompt = conv_icl2(exp1,exp2,sample),
             prompt = sample['Original_Report'],
             max_new_tokens=430,
+            instruct=False,
         )
     
         with open(f'{output_dir}/{sample_cnt}.txt','w') as f:
