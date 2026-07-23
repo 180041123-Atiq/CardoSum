@@ -1,8 +1,8 @@
 import zipfile
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 import numpy as np
-# from transformers import AutoTokenizer
-# from datasets import load_dataset
+from transformers import AutoTokenizer
+from datasets import load_dataset
 
 def conv_icl2(exp1, exp2, exp3):
     return [
@@ -95,13 +95,14 @@ def token_count():
     
     dataset = load_dataset(
         "csv",
-        data_files="test.csv",
+        data_files=["train.csv","val.csv","test.csv"],
     )['train']
     
     lengths = []
     
-    for sample in dataset:
-        text = sample["GPT_Summary"]          # Change "text" to your column name
+    for ii,sample in enumerate(dataset):
+        # text = sample["GPT_Summary"]          # Change "text" to your column name
+        text = sample["Original_Report"]          # Change "text" to your column name
         # print(text)
         # break
         tokens = tokenizer(
@@ -110,7 +111,11 @@ def token_count():
             truncation=False,
         )["input_ids"]
     
-        lengths.append(len(tokens))
+        if ii!=4405 and ii!=895 and ii!=9769 and ii!=244 and ii!= 2464 and ii!=2299 and ii!=2814 and ii!=3310 and ii!=3905\
+        and ii!=8693 and ii!=7889 and ii!=337 and ii!=4141 and ii!=310: lengths.append(len(tokens))
+        if ii==4: print(ii, len(tokens))
+        if ii==6: print(ii, len(tokens))
+        if len(tokens) == 144: print(text,ii)
     
     lengths = np.array(lengths)
     
@@ -125,8 +130,8 @@ def token_count():
     print(f"99th percentile   : {np.percentile(lengths,99):.2f}")
 
 if __name__ == '__main__':
-    # token_count()
-    tensorboard_event_reader('output_awgrpo/runs/Jul15_21-37-05_6ef3283a98b8/events.out.tfevents.1784151425.6ef3283a98b8.8212.0')
+    token_count()
+    # tensorboard_event_reader('output_awgrpo/runs/Jul15_21-37-05_6ef3283a98b8/events.out.tfevents.1784151425.6ef3283a98b8.8212.0')
     # pass
     # # print(gen_layout_prompt(106))
     # # plot_graph()
