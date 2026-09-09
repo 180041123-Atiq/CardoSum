@@ -4,6 +4,10 @@ import numpy as np
 from transformers import AutoTokenizer
 from datasets import load_dataset
 
+import pandas as pd
+from datasketch import MinHash, MinHashLSH
+from tqdm import tqdm
+
 def conv_icl2(exp1, exp2, exp3):
     return [
         {
