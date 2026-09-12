@@ -48,19 +48,20 @@ if __name__ == '__main__':
     )
     
     config = SFTConfig(
-        output_dir='output_sft',
+        output_dir='output_sft_44',
+        seed=44,
         per_device_train_batch_size=8,
         num_train_epochs=3,
         learning_rate=1e-5,
         lr_scheduler_type="cosine",
-        warmup_ratio=0.05,
+        warmup_steps=0.05,
         
         save_strategy="steps",
-        save_steps=0.2,
+        save_steps=0.5,
         
-        eval_on_start=True,
-        eval_strategy='steps',
-        eval_steps=0.2,
+        # eval_on_start=True,
+        # eval_strategy='steps',
+        # eval_steps=0.2,
 
         # load_best_model_at_end=True,
         # metric_for_best_model="eval_loss",
