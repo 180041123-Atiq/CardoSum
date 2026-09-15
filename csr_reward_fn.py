@@ -108,6 +108,86 @@ def calc_concise_reward(prompts, completions, **kwargs):
 
     return rewards
 
+
+
+def calc_piecewise_conciseness_reward(prompts, completions, **kwargs):
+
+    rewards = []
+    initial_prompt = 'Please explain the following Echocardiography report. '
+
+    target_cr = 1.6
+
+    # Reward at CR = 1.0
+    base_reward = 0.70
+
+    # Maximum reward at target CR
+    max_reward = 1.0
+
+    # Controls how gradually reward rises from 1.0 -> 1.6
+    exponent = 2.5
+
+    # Penalty after target
+    upper_scale = 0.20
+
+    for prompt, completion in zip(prompts, completions):
+
+        if not isinstance(prompt, str):
+            prompt = prompt[0]['content']
+
+        if not isinstance(completion, str):
+            completion = completion[0]['content']
+
+        report = prompt.split(initial_prompt)[1]
+
+        len_report = len(
+            llama_tok_concise_rew.encode(report)
+        )
+
+        len_comp = len(
+            llama_tok_concise_rew.encode(completion)
+        )
+
+        if len_comp == 0:
+            rewards.append(0.0)
+            continue
+
+        gen_cr = len_report / len_comp
+
+        if gen_cr < 1.0:
+
+            # Penalize excessive verbosity
+            # but keep the penalty relatively mild.
+            reward = base_reward * (gen_cr ** 2)
+
+        elif gen_cr <= target_cr:
+
+            # Normalize CR from [1.0, 1.6] -> [0, 1]
+            progress = (gen_cr - 1.0) / (target_cr - 1.0)
+
+            # Diminishing returns as CR approaches 1.6
+            reward = (
+                base_reward
+                + (max_reward - base_reward)
+                * (progress ** exponent)
+            )
+
+        else:
+
+            # Strong penalty for excessive compression
+            diff = gen_cr - target_cr
+
+            reward = max_reward * np.exp(
+                -diff / upper_scale
+            )
+
+        reward = np.clip(reward, 0.0, 1.0)
+
+        rewards.append(float(reward))
+
+    return rewards
+
+
+
 def calc_readability_reward(completions, **kwargs):
 
     # completions comes in chat template
@@ -123,6 +203,60 @@ def calc_readability_reward(completions, **kwargs):
         rewards.append(np.exp(-abs(smog_id - mean_smog) / std_smog))
 
     return rewards
+
+
+def calc_piecewise_readability_reward(completions, **kwargs):
+
+    # Desired readability target
+    target_smog = 6.0
+
+    # Penalty for readability scores below the target
+    lower_scale = 2.0
+
+    # Very small penalty between target and mean
+    near_target_scale = 10.0
+
+    # Stronger penalty beyond the mean
+    upper_scale = 1.0
+
+    rewards = []
+
+    for ii, completion in enumerate(completions):
+
+        if isinstance(completion, str):
+            text = completion
+        else:
+            text = completion[0]['content']
+
+        smog_id = textstat.smog_index(text)
+
+        if smog_id <= target_smog:
+            # Penalize scores below the target
+            reward = np.exp(
+                -(target_smog - smog_id) / lower_scale
+            )
+
+        elif smog_id <= mean_smog:
+            # Very small penalty between target and mean
+            reward = np.exp(
+                -(smog_id - target_smog) / near_target_scale
+            )
+
+        else:
+            # Stronger penalty once readability becomes
+            # substantially worse than the population mean
+            reward_at_mean = np.exp(
+                -(mean_smog - target_smog) / near_target_scale
+            )
+
+            reward = reward_at_mean * np.exp(
+                -(smog_id - mean_smog) / upper_scale
+            )
+
+        rewards.append(reward)
+
+    return rewards
+
 
 def reward_fn(prompts, completions, reference, **kwargs):
 

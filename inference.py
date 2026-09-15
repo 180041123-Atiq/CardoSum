@@ -68,6 +68,10 @@ class LLMInference:
         model_max_length = self.model.config.max_position_embeddings
         max_input_length = model_max_length - max_new_tokens
 
+        # print(f'max_input_length is : {max_input_length}')
+        # print(f'model_max_length is : {model_max_length}')
+        # print(f'max_new_tokens is : {max_new_tokens}')
+
         if instruct:
             inputs = self.tokenizer.apply_chat_template(
                 messages,
@@ -104,11 +108,11 @@ class LLMInference:
 
 if __name__ == "__main__":
 
-    # MODEL_NAME = "meta-llama/Llama-3.2-3B-Instruct"
+    MODEL_NAME = "meta-llama/Llama-3.2-3B-Instruct"
     # MODEL_NAME = "medalpaca/medalpaca-7b"
-    MODEL_NAME = "epfl-llm/meditron-7b"
-    # ADAPTER = "output_awgrpo/checkpoint-200"
-    ADAPTER = None
+    # MODEL_NAME = "epfl-llm/meditron-7b"
+    ADAPTER = "grpo_piecewise_checkpoint-1000"
+    # ADAPTER = None
 
     llm = LLMInference(
         model_name=MODEL_NAME,
@@ -125,7 +129,7 @@ if __name__ == "__main__":
     )['train']
     exp1,exp2 = train_dataset[4], train_dataset[6]
 
-    output_dir = 'output_bad_output/meditron7b'
+    output_dir = 'output_grpo_piecewise'
     os.makedirs(output_dir, exist_ok=True)
     sample_cnt = 0
     
@@ -135,8 +139,8 @@ if __name__ == "__main__":
         response = llm.generate(
             # prompt = conv_icl2(exp1,exp2,sample),
             prompt = sample['Original_Report'],
-            max_new_tokens=430,
-            instruct=False,
+            max_new_tokens=640,
+            instruct=True,
         )
     
         with open(f'{output_dir}/{sample_cnt}.txt','w') as f:

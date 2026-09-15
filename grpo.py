@@ -11,6 +11,7 @@ from transformers import (
 from peft import PeftModel
 
 from csr_reward_fn import calc_similarity_reward, calc_readability_reward, calc_concise_reward
+from csr_reward_fn import calc_piecewise_readability_reward, calc_piecewise_concise_reward
 
 def get_dataset_dict(paths):
     dataset_dict = {}
