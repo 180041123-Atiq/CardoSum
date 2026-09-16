@@ -111,7 +111,7 @@ if __name__ == "__main__":
     MODEL_NAME = "meta-llama/Llama-3.2-3B-Instruct"
     # MODEL_NAME = "medalpaca/medalpaca-7b"
     # MODEL_NAME = "epfl-llm/meditron-7b"
-    ADAPTER = "grpo_piecewise_checkpoint-1000"
+    ADAPTER = "output_sft_43/checkpoint-2250"
     # ADAPTER = None
 
     llm = LLMInference(
@@ -129,7 +129,7 @@ if __name__ == "__main__":
     )['train']
     exp1,exp2 = train_dataset[4], train_dataset[6]
 
-    output_dir = 'output_grpo_piecewise'
+    output_dir = 'gen_outputs_sft_43'
     os.makedirs(output_dir, exist_ok=True)
     sample_cnt = 0
     
