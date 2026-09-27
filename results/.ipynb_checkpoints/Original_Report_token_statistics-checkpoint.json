@@ -1,0 +1,10 @@
+{
+    "number_of_samples": 9985,
+    "min_tokens": 144,
+    "max_tokens": 679,
+    "mean_tokens": 319.16,
+    "median_tokens": 315.0,
+    "std_deviation": 41.7,
+    "95th_percentile": 388.0,
+    "99th_percentile": 434.0
+}
