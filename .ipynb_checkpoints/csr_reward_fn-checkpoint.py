@@ -271,18 +271,18 @@ def reward_fn(prompts, completions, reference, **kwargs):
     
 
 if __name__ == '__main__':
+    
     prompts,completions,references = [],[],[]
-    test_dataset = load_dataset(
-        "csv",
-        data_files="test.csv",
-    )['train']
+    test_dataset = load_dataset("csv",data_files="test.csv",)['train']
+    
     # output_dir = 'output_awgrpo/grpo_outputs'
     # output_dir = 'output_awgrpo/awgrpo_outputs'
     # output_dir = 'output_awgrpo/sft_outputs'
     # output_dir = 'output_awgrpo/icl2_outputs/icl2_outputs'
     # output_dir = 'output_awgrpo/icl2_outputs/meditron7b_icl2_outputs'
     # output_dir = 'output_awgrpo/icl2_outputs/vicuna7b_icl2_outputs'
-    output_dir = 'output_awgrpo/llama8b_icl2_outputs'
+    # output_dir = 'output_awgrpo/llama8b_icl2_outputs'
+    output_dir = 'gen_outputs_awgrpo_piecewise_rewards_42'
     
     for ii,sample in enumerate(tqdm(test_dataset, total=len(test_dataset), desc='Converting samples for reward calc')):
         prompts.append(sample['Original_Report'])
@@ -293,11 +293,22 @@ if __name__ == '__main__':
         
         completions.append(completion)
 
-    readability_rewards = calc_readability_reward(completions)
-    conciseness_rewards = calc_concise_reward(prompts,completions)
+    # For Normal Rewards
+    # readability_rewards = calc_readability_reward(completions)
+    # conciseness_rewards = calc_concise_reward(prompts,completions)
+    # similarity_rewards = calc_similarity_reward(completions,references)
+
+    # For Piecewise Readability and Conciseness
+    readability_rewards = calc_piecewise_readability_reward(completions)
+    conciseness_rewards = calc_piecewise_conciseness_reward(prompts,completions)
     similarity_rewards = calc_similarity_reward(completions,references)
     
     print('avg readability', sum(readability_rewards)/len(readability_rewards))
     print('avg conciseness', sum(conciseness_rewards)/len(conciseness_rewards))
     print('avg similarity', sum(similarity_rewards)/len(similarity_rewards))
     # reward_fn(prompts=None, completions=None, reference=None)
+
+    with open(f'results/{output_dir}_reward_score.txt','w') as f:
+        f.write(f"avg readability: {sum(readability_rewards)/len(readability_rewards)}\n")
+        f.write(f"avg conciseness: {sum(conciseness_rewards)/len(conciseness_rewards)}\n")
+        f.write(f"avg similarity: {sum(similarity_rewards)/len(similarity_rewards)}")

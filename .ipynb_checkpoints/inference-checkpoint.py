@@ -105,13 +105,49 @@ class LLMInference:
             skip_special_tokens=True,
         )
 
+def eval_score(preds, refs, file_name):
+    rouge = eval_load("rouge")
+    bertscore = eval_load("bertscore")
+
+    # Compute metrics
+    rouge_res = rouge.compute(predictions=preds, references=refs)
+    bert_res = bertscore.compute(predictions=preds, references=refs, lang="en")
+
+    print({
+        "ROUGE-L": rouge_res["rougeL"],
+        "BERTScore-F1": sum(bert_res["f1"]) / len(bert_res["f1"]),
+    })
+
+    with open(file_name,'w') as f:
+        f.write(f"ROUGE-L: {rouge_res['rougeL']}\n")
+        f.write(f"BERTScore-F1: {sum(bert_res['f1']) / len(bert_res['f1'])}")
+
+def evaluation(pred_dir):
+    preds, refs = [], []
+    test_dataset = load_dataset('csv',data_files='test.csv')['train']
+    # pred_dir = 'output_awgrpo/awgrpo_outputs_200'
+    for ii,sample in enumerate(tqdm(test_dataset,total=len(test_dataset),desc='Converting samples for eval')):
+        # print(sample)
+        # break
+        pred, ref = '', sample['GPT_Summary']
+        with open(f'{pred_dir}/{ii}.txt', 'r') as f:
+            pred = f.read()
+        # print()
+        # print(pred)
+        # print()
+        # print(ref)
+        # break
+        preds.append(pred)
+        refs.append(ref)
+        
+    eval_score(preds,refs,f'results/{pred_dir}_eval_score.txt')
 
 if __name__ == "__main__":
 
     MODEL_NAME = "meta-llama/Llama-3.2-3B-Instruct"
     # MODEL_NAME = "medalpaca/medalpaca-7b"
     # MODEL_NAME = "epfl-llm/meditron-7b"
-    ADAPTER = "output_sft_43/checkpoint-2250"
+    ADAPTER = "output_sft_44/checkpoint-2250"
     # ADAPTER = None
 
     llm = LLMInference(
@@ -123,13 +159,13 @@ if __name__ == "__main__":
         "csv",
         data_files="test.csv",
     )['train']
-    train_dataset = load_dataset(
-        "csv",
-        data_files="train.csv",
-    )['train']
-    exp1,exp2 = train_dataset[4], train_dataset[6]
+    # train_dataset = load_dataset(
+    #     "csv",
+    #     data_files="train.csv",
+    # )['train']
+    # exp1,exp2 = train_dataset[4], train_dataset[6]
 
-    output_dir = 'gen_outputs_sft_43'
+    output_dir = 'gen_outputs_sft_44'
     os.makedirs(output_dir, exist_ok=True)
     sample_cnt = 0
     
@@ -146,3 +182,6 @@ if __name__ == "__main__":
         with open(f'{output_dir}/{sample_cnt}.txt','w') as f:
             f.write(response)
         sample_cnt += 1
+
+    # Need to check this
+    evaluation(output_dir)
