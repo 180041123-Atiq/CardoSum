@@ -282,7 +282,7 @@ if __name__ == '__main__':
     # output_dir = 'output_awgrpo/icl2_outputs/meditron7b_icl2_outputs'
     # output_dir = 'output_awgrpo/icl2_outputs/vicuna7b_icl2_outputs'
     # output_dir = 'output_awgrpo/llama8b_icl2_outputs'
-    output_dir = 'gen_outputs_awgrpo_piecewise_rewards_42'
+    output_dir = 'gen_outputs_sft_44'
     
     for ii,sample in enumerate(tqdm(test_dataset, total=len(test_dataset), desc='Converting samples for reward calc')):
         prompts.append(sample['Original_Report'])
@@ -294,14 +294,14 @@ if __name__ == '__main__':
         completions.append(completion)
 
     # For Normal Rewards
-    # readability_rewards = calc_readability_reward(completions)
-    # conciseness_rewards = calc_concise_reward(prompts,completions)
-    # similarity_rewards = calc_similarity_reward(completions,references)
+    readability_rewards = calc_readability_reward(completions)
+    conciseness_rewards = calc_concise_reward(prompts,completions)
+    similarity_rewards = calc_similarity_reward(completions,references)
 
     # For Piecewise Readability and Conciseness
-    readability_rewards = calc_piecewise_readability_reward(completions)
-    conciseness_rewards = calc_piecewise_conciseness_reward(prompts,completions)
-    similarity_rewards = calc_similarity_reward(completions,references)
+    # readability_rewards = calc_piecewise_readability_reward(completions)
+    # conciseness_rewards = calc_piecewise_conciseness_reward(prompts,completions)
+    # similarity_rewards = calc_similarity_reward(completions,references)
     
     print('avg readability', sum(readability_rewards)/len(readability_rewards))
     print('avg conciseness', sum(conciseness_rewards)/len(conciseness_rewards))

@@ -7,6 +7,7 @@ from peft import PeftModel
 from datasets import load_dataset
 import os
 from tqdm import tqdm
+from evaluate import load as eval_load
 
 from utils import conv_icl2
 

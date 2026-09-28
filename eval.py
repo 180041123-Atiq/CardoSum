@@ -30,7 +30,7 @@ def eval_score(preds, refs, file_name):
 if __name__ == '__main__':
     preds, refs = [], []
     test_dataset = load_dataset('csv',data_files='test.csv')['train']
-    pred_dir = 'gen_outputs_sft_43'
+    pred_dir = 'gen_outputs_sft_44'
     for ii,sample in enumerate(tqdm(test_dataset,total=len(test_dataset),desc='Converting samples for eval')):
         # print(sample)
         # break
