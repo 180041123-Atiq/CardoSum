@@ -148,7 +148,7 @@ if __name__ == "__main__":
     MODEL_NAME = "meta-llama/Llama-3.2-3B-Instruct"
     # MODEL_NAME = "medalpaca/medalpaca-7b"
     # MODEL_NAME = "epfl-llm/meditron-7b"
-    ADAPTER = "output_sft_44/checkpoint-2250"
+    ADAPTER = "output_HVO/checkpoint-1000"
     # ADAPTER = None
 
     llm = LLMInference(
@@ -166,7 +166,7 @@ if __name__ == "__main__":
     # )['train']
     # exp1,exp2 = train_dataset[4], train_dataset[6]
 
-    output_dir = 'gen_outputs_sft_44'
+    output_dir = 'gen_outputs_HVO'
     os.makedirs(output_dir, exist_ok=True)
     sample_cnt = 0
     
