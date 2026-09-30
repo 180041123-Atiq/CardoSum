@@ -66,27 +66,45 @@ def tensorboard_event_reader(file_path):
     ea = EventAccumulator(file_path)
     ea.Reload()
     
-    # print(ea.Tags())
+    print(ea.Tags())
+
+    # Total tokens processed
+    num_tokens = ea.Scalars("train/num_tokens")
+    total_tokens = num_tokens[-1].value
+    # print('tokens : ',num_tokens[-3].value,' ',num_tokens[-2].value,' ',total_tokens)
+
+    # Total training runtime
+    runtime = ea.Scalars("train/train_runtime")
+    total_runtime = runtime[-1].value
+    # print('runtime : ',len(runtime),total_runtime)
+
+    # Throughput
+    throughput = total_tokens / total_runtime
+
+    print(f"Total tokens processed: {total_tokens:,.0f}")
+    print(f"Total runtime: {total_runtime:.2f} seconds")
+    print(f"Throughput: {throughput:,.2f} tokens/sec")
+    
     # print(ea.Scalars('train/reward'))
     # eval_loss = ea.Scalars("eval/loss")
     # print(eval_loss)
 
-    reward_events = ea.Scalars("train/reward")
-    calc_similarity_events = ea.Scalars('train/rewards/calc_similarity_reward/mean')
-    calc_concise_events = ea.Scalars('train/rewards/calc_concise_reward/mean')
-    calc_readability_events = ea.Scalars('train/rewards/calc_readability_reward/mean')
-    for event in reward_events:
-        if event.step in [200, 400, 600, 800, 1000]:
-            print(f"Step {event.step}: Reward = {event.value:.4f}")
-    for event in calc_similarity_events:
-        if event.step in [200, 400, 600, 800, 1000]:
-            print(f"Step {event.step}: Similarity Reward Mean = {event.value:.4f}")
-    for event in calc_concise_events:
-        if event.step in [200, 400, 600, 800, 1000]:
-            print(f"Step {event.step}: Concise Reward Mean = {event.value:.4f}")
-    for event in calc_readability_events:
-        if event.step in [200, 400, 600, 800, 1000]:
-            print(f"Step {event.step}: Redability Reward Mean = {event.value:.4f}")
+    # reward_events = ea.Scalars("train/reward")
+    # calc_similarity_events = ea.Scalars('train/rewards/calc_similarity_reward/mean')
+    # calc_concise_events = ea.Scalars('train/rewards/calc_concise_reward/mean')
+    # calc_readability_events = ea.Scalars('train/rewards/calc_readability_reward/mean')
+    # for event in reward_events:
+    #     if event.step in [200, 400, 600, 800, 1000]:
+    #         print(f"Step {event.step}: Reward = {event.value:.4f}")
+    # for event in calc_similarity_events:
+    #     if event.step in [200, 400, 600, 800, 1000]:
+    #         print(f"Step {event.step}: Similarity Reward Mean = {event.value:.4f}")
+    # for event in calc_concise_events:
+    #     if event.step in [200, 400, 600, 800, 1000]:
+    #         print(f"Step {event.step}: Concise Reward Mean = {event.value:.4f}")
+    # for event in calc_readability_events:
+    #     if event.step in [200, 400, 600, 800, 1000]:
+    #         print(f"Step {event.step}: Redability Reward Mean = {event.value:.4f}")
     
     
 def correcting_samples():
@@ -178,7 +196,11 @@ def token_count():
     print(f'Statistics saved at {output_file}')
 
 if __name__ == '__main__':
-    token_count()
+    # tensorboard_event_reader('sft_43_runs/Sep12_16-11-23_ef230ad5e6ce/events.out.tfevents.1789229483.ef230ad5e6ce.23191.0')
+    # tensorboard_event_reader('piecewise_grpo_runs/Sep30_02-50-28_d12dc12d52e6/events.out.tfevents.1790736628.d12dc12d52e6.4518.0')
+    # tensorboard_event_reader('piecewise_awgrpo_runs/Sep14_19-29-30_f86ba51b76a3/events.out.tfevents.1789414170.f86ba51b76a3.56098.0')
+    tensorboard_event_reader('piecewise_HVO_runs/Sep28_16-49-49_7751eed1fb45/events.out.tfevents.1790614189.7751eed1fb45.5802.0')
+    # token_count()
     # correcting_samples()
     # tensorboard_event_reader('output_awgrpo/runs/Jul15_21-37-05_6ef3283a98b8/events.out.tfevents.1784151425.6ef3283a98b8.8212.0')
     # pass
