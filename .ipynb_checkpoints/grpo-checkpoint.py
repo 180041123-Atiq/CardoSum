@@ -10,8 +10,8 @@ from transformers import (
 )
 from peft import PeftModel
 
-from csr_reward_fn import calc_similarity_reward, calc_readability_reward, calc_concise_reward
-from csr_reward_fn import calc_piecewise_readability_reward, calc_piecewise_concise_reward
+from csr_reward_fn import calc_similarity_reward
+from csr_reward_fn import calc_piecewise_readability_reward, calc_piecewise_conciseness_reward
 
 def get_dataset_dict(paths):
     dataset_dict = {}
@@ -38,7 +38,7 @@ if __name__ == '__main__':
     dataset_dict = get_dataset_dict(paths)
     
     config = GRPOConfig(
-        output_dir="./output_awgrpo",
+        output_dir="./output_piecewise_grpo",
     
         num_generations=4,
         per_device_train_batch_size=16,
@@ -58,7 +58,7 @@ if __name__ == '__main__':
         save_steps=0.2,
     
         # reward_weights=[-1.0, -1.0, -1.0],
-        multi_objective_aggregation='AWGRPO',
+        # multi_objective_aggregation='AWGRPO',
         logging_strategy='steps',
         logging_steps=1,              # log every N steps
         report_to="tensorboard", 
@@ -82,7 +82,7 @@ if __name__ == '__main__':
     # )
 
     model_name = 'meta-llama/Llama-3.2-3B-Instruct'
-    lora_path = 'output_sft/checkpoint-2250'
+    lora_path = 'output_sft_43/checkpoint-2250'
     
     processing_class = AutoTokenizer.from_pretrained(model_name)
 
@@ -102,7 +102,7 @@ if __name__ == '__main__':
     trainer = CSRTrainer(
         model=model,
         processing_class=processing_class,
-        reward_funcs=[calc_similarity_reward, calc_readability_reward, calc_concise_reward],
+        reward_funcs=[calc_similarity_reward, calc_piecewise_readability_reward, calc_piecewise_conciseness_reward],
         args=config,
         train_dataset=dataset_dict['train'],
         # eval_dataset=dataset_dict['val'],
