@@ -109,4 +109,18 @@ if __name__ == '__main__':
     )
 
     trainer.train()
+
+    # For Peak GPU Memory
+    # dataset_dict['val'].shuffle(seed=42).select(range(100))
+    # torch.cuda.reset_peak_memory_stats()
+
+    # trainer.train()
+    
+    # # Get peak memory after training
+    # peak_memory_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
+    
+    # print(f"Peak GPU memory: {peak_memory_gb:.2f} GB")
+    
+    # with open('peak_gpu_mem_grpo.txt','w') as f:
+    #     f.write(f"Peak GPU memory: {peak_memory_gb:.2f} GB\n")
     

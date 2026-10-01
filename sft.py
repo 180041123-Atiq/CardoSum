@@ -92,3 +92,5 @@ if __name__ == '__main__':
     # 16	2e-5	1.5e-5 – 3e-5
     # 32	3e-5	2e-5 – 4e-5
     # 64	5e-5	3e-5 – 6e-5
+
+    # val_100 = val_dataset.shuffle(seed=42).select(range(100)) for peak GPU memory

@@ -1,0 +1,1 @@
+Peak GPU memory: 22.42 GB
