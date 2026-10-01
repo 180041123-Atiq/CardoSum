@@ -282,7 +282,7 @@ if __name__ == '__main__':
     # output_dir = 'output_awgrpo/icl2_outputs/meditron7b_icl2_outputs'
     # output_dir = 'output_awgrpo/icl2_outputs/vicuna7b_icl2_outputs'
     # output_dir = 'output_awgrpo/llama8b_icl2_outputs'
-    output_dir = 'gen_outputs_piecewise_GRPO'
+    output_dir = 'gen_outputs_piecewise_hvo_44'
     
     for ii,sample in enumerate(tqdm(test_dataset, total=len(test_dataset), desc='Converting samples for reward calc')):
         prompts.append(sample['Original_Report'])
