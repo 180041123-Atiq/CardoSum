@@ -1,3 +1,0 @@
-avg readability: 0.6915326618777605
-avg conciseness: 0.7479474521360698
-avg similarity: 0.8124062418937683
